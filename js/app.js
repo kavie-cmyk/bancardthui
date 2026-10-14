@@ -15,7 +15,10 @@
     chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>',
     coin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.5c-.7-1-1.8-1.5-3-1.5-1.7 0-3 .9-3 2.2 0 2.9 6 1.4 6 4.3 0 1.3-1.3 2.2-3 2.2-1.2 0-2.3-.5-3-1.5"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>',
-    card: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/></svg>'
+    card: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/></svg>',
+    layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
+    help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 015 .9c0 1.7-2.4 2-2.4 3.6M12 17v.5"/></svg>',
+    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3l4 4L8 20l-5 1 1-5L17 3z"/></svg>'
   };
 
   /* ---------- state ---------- */
@@ -54,6 +57,7 @@
   var NAV = [
     { path: '#/dashboard', label: 'Tổng quan', icon: IC.grid },
     { path: '#/kho', label: 'Kho card', icon: IC.box },
+    { path: '#/sets', label: 'Bộ sưu tập', icon: IC.layers },
     { path: '#/nhap', label: 'Nhập kho', icon: IC.plus },
     { path: '#/ban', label: 'Bán hàng', icon: IC.tag },
     { path: '#/donhang', label: 'Đơn hàng', icon: IC.receipt }
@@ -101,7 +105,8 @@
     var app = document.getElementById('app');
     window.scrollTo(0, 0);
     if (base === 'dashboard') app.innerHTML = vDashboard();
-    else if (base === 'kho') app.innerHTML = r.segs[1] ? vCardDetail(r.segs[1]) : vKho();
+    else if (base === 'kho') app.innerHTML = (r.segs[1] && r.segs[2] === 'edit') ? vCardEdit(r.segs[1]) : (r.segs[1] ? vCardDetail(r.segs[1]) : vKho());
+    else if (base === 'sets') app.innerHTML = r.segs.length > 1 ? vSetDetail(decodeURIComponent(r.segs.slice(1).join('/'))) : vSets();
     else if (base === 'nhap') app.innerHTML = vNhap(r.query.card || '');
     else if (base === 'ban') app.innerHTML = vBan(r.query.card || '');
     else if (base === 'donhang') app.innerHTML = r.segs[1] ? vOrderDetail(r.segs[1]) : vDonHang();
@@ -250,7 +255,9 @@
     });
     sets.sort(); rarities.sort();
 
-    var html = '<h1 class="page-title">Kho card</h1><p class="page-sub">' + S.cards.length + ' loại card · bấm vào từng card để xem lô nhập & lịch sử bán</p>';
+    var html = '<h1 class="page-title">Kho card <button class="icon-btn" id="rarity-help" title="Ký hiệu độ hiếm">' + IC.help + '</button></h1>' +
+      '<div class="popover" id="rarity-pop" hidden>' + rarityLegendHTML() + '</div>' +
+      '<p class="page-sub">' + S.cards.length + ' loại card · bấm vào từng card để xem lô nhập & lịch sử bán</p>';
     html += '<div class="toolbar">';
     html += '<input type="search" id="f-q" placeholder="Tìm tên, set, mã số…" value="' + BCT.esc(khoFilter.q) + '">';
     html += '<select id="f-set"><option value="">Mọi set</option>' + sets.map(function (s) { return '<option value="' + BCT.esc(s) + '"' + (khoFilter.set === s ? ' selected' : '') + '>' + BCT.esc(s) + '</option>'; }).join('') + '</select>';
@@ -312,7 +319,10 @@
     html += '<div class="detail-head">';
     if (img) html += '<img class="detail-img" src="' + img + '" alt="' + BCT.esc(c.name) + '">';
     html += '<div class="detail-info"><h1>' + BCT.esc(c.name) + '</h1>';
-    html += '<div class="meta">' + BCT.esc(c.set || '') + (c.number ? ' · ' + BCT.esc(c.number) : '') + '</div>';
+    var setInfo = BCT.resolveSet(S, c);
+    var numLabel = c.number ? 'Lá số <b class="mono">' + BCT.esc(c.number) + (setInfo.total ? '/' + setInfo.total : '') + '</b>' : '';
+    html += '<div class="meta">' + BCT.esc(setInfo.name || c.set || '') + (numLabel ? ' · ' + numLabel : '') + '</div>';
+    if (BCT.isSecretCard(c, setInfo)) html += '<div style="margin-bottom:8px"><span class="secret-tag">SECRET RARE — số vượt tổng set</span></div>';
     html += '<div>' + (c.rarity ? '<span class="tag">' + BCT.esc(c.rarity) + '</span>' : '') +
       '<span class="tag">' + (BCT.CONDITIONS[c.condition] || c.condition) + '</span>' +
       (c.graded ? '<span class="tag">' + c.graded.org + ' ' + c.graded.score + '</span>' : '') + '</div>';
@@ -321,7 +331,10 @@
       stat('Tổng vốn ôm', BCT.fmtVND(st * avg)) + stat('Giá bán gần nhất', lastSell ? BCT.fmtVND(lastSell) : '—') + '</div>';
     html += '<div class="form-actions" style="margin-top:6px">' +
       '<a class="btn secondary" href="#/nhap?card=' + c.id + '" style="text-decoration:none">' + IC.plus + ' Nhập thêm lô</a>' +
-      '<a class="btn" href="#/ban?card=' + c.id + '" style="text-decoration:none">' + IC.tag + ' Tạo đơn bán</a></div>';
+      '<a class="btn" href="#/ban?card=' + c.id + '" style="text-decoration:none">' + IC.tag + ' Tạo đơn bán</a>' +
+      '<a class="btn secondary" href="#/kho/' + c.id + '/edit" style="text-decoration:none">' + IC.edit + ' Sửa</a>' +
+      (setInfo.key && setInfo.key !== '__none__' ? '<a class="btn secondary" href="#/sets/' + encodeURIComponent(setInfo.key) + '" style="text-decoration:none">' + IC.layers + ' Xem trong Bộ sưu tập</a>' : '') +
+      '</div>';
     if (c.note) html += '<p style="color:var(--muted);font-size:13px;margin-top:10px">' + BCT.esc(c.note) + '</p>';
     html += '</div></div>';
 
@@ -366,8 +379,222 @@
 
   function stat(l, v) { return '<div class="st"><div class="l">' + l + '</div><div class="v">' + v + '</div></div>'; }
 
+  /* ---------- legend độ hiếm Pokémon TCG ---------- */
+  function rarityLegendHTML() {
+    var rows = [
+      ['●', 'Common', 'chấm tròn đen'],
+      ['◆', 'Uncommon', 'hình thoi đen'],
+      ['★', 'Rare', 'sao đen'],
+      ['★★', 'Double Rare', '2 sao đen — thẻ ex thường'],
+      ['★★', 'Ultra Rare', '2 sao bạc — thẻ V / VMAX / VSTAR'],
+      ['★', 'Illustration Rare', 'sao vàng — art đặc biệt'],
+      ['★★', 'Special Illustration Rare', '2 sao vàng — alt art'],
+      ['★★★', 'Hyper Rare', '3 sao vàng — rainbow/gold'],
+      ['★', 'ACE SPEC Rare', 'sao hồng — ACE SPEC'],
+      ['PROMO', 'Promo', 'thẻ promo, không thuộc set chính']
+    ];
+    return '<div class="rarity-legend">' + rows.map(function (r) {
+      return '<div class="rl-row"><span class="rl-sym">' + r[0] + '</span><span class="rl-name">' + r[1] + '</span><span class="rl-desc">' + r[2] + '</span></div>';
+    }).join('') + '<div class="rl-note">Số thứ tự vượt tổng in trên thẻ (vd 115/114) = <b>secret rare</b> — thẻ hiếm nằm ngoài set chính.</div></div>';
+  }
+
+  /* ================= VIEW: BỘ SƯU TẬP (SETS) ================= */
+  var setFilter = { sort: 'progress', year: 'all', groupYear: false };
+
+  function vSets() {
+    var groups = BCT.setGroups(S).filter(function (g) { return g.key !== '__none__' || g.cards.length; });
+    // tách nhóm chưa phân loại ra cuối
+    var unclassified = groups.filter(function (g) { return g.key === '__none__'; });
+    groups = groups.filter(function (g) { return g.key !== '__none__'; });
+
+    if (setFilter.year !== 'all') {
+      groups = groups.filter(function (g) {
+        var y = g.info.year;
+        return setFilter.year === 'unknown' ? y == null : y === Number(setFilter.year);
+      });
+    }
+    var withP = groups.map(function (g) { return { g: g, p: BCT.setProgress(S, g) }; });
+    withP.sort(function (a, b) {
+      if (setFilter.sort === 'name') return a.g.info.name.localeCompare(b.g.info.name);
+      if (setFilter.sort === 'value') return b.p.value - a.p.value;
+      var pa = a.p.pct == null ? -1 : a.p.pct, pb = b.p.pct == null ? -1 : b.p.pct;
+      return pb - pa;
+    });
+
+    var years = [];
+    BCT.setGroups(S).forEach(function (g) {
+      if (g.info.year != null && years.indexOf(g.info.year) < 0) years.push(g.info.year);
+    });
+    years.sort(function (a, b) { return b - a; });
+
+    var html = '<h1 class="page-title">Bộ sưu tập</h1><p class="page-sub">Tiến độ sưu tập theo từng set — bấm vào set để xem checklist từng lá</p>';
+    html += '<div class="toolbar">';
+    html += '<select id="s-sort">' +
+      '<option value="progress"' + (setFilter.sort === 'progress' ? ' selected' : '') + '>Tiến độ ↓</option>' +
+      '<option value="name"' + (setFilter.sort === 'name' ? ' selected' : '') + '>Tên A–Z</option>' +
+      '<option value="value"' + (setFilter.sort === 'value' ? ' selected' : '') + '>Giá trị kho ↓</option></select>';
+    html += '<select id="s-year"><option value="all">Mọi năm</option>' +
+      years.map(function (y) { return '<option value="' + y + '"' + (setFilter.year === String(y) ? ' selected' : '') + '>Năm ' + y + '</option>'; }).join('') +
+      '<option value="unknown"' + (setFilter.year === 'unknown' ? ' selected' : '') + '>Chưa rõ năm</option></select>';
+    html += '<label class="chk"><input type="checkbox" id="s-groupyear"' + (setFilter.groupYear ? ' checked' : '') + '> Nhóm theo năm</label>';
+    html += '</div>';
+
+    if (!withP.length && !unclassified.length) {
+      return html + '<div class="empty"><h3>Chưa có set nào</h3><p>Nhập kho và gắn set cho card để theo dõi tiến độ sưu tập.</p></div>';
+    }
+
+    if (setFilter.groupYear) {
+      var yg = {};
+      withP.forEach(function (x) {
+        var k = x.g.info.year == null ? '__unknown__' : String(x.g.info.year);
+        (yg[k] = yg[k] || []).push(x);
+      });
+      var keys = Object.keys(yg).sort(function (a, b) {
+        if (a === '__unknown__') return 1; if (b === '__unknown__') return -1;
+        return Number(b) - Number(a);
+      });
+      keys.forEach(function (k) {
+        html += '<h2 class="year-head">' + (k === '__unknown__' ? 'Chưa rõ năm' : 'Năm ' + k) + ' <span class="year-count">' + yg[k].length + ' set</span></h2>';
+        html += '<div class="set-grid">' + yg[k].map(setCardHTML).join('') + '</div>';
+      });
+    } else {
+      html += '<div class="set-grid">' + withP.map(setCardHTML).join('') + '</div>';
+    }
+
+    if (unclassified.length) {
+      var uq = unclassified[0].cards.reduce(function (t, c) { return t + BCT.stockOf(S, c.id); }, 0);
+      html += '<h2 class="year-head">Chưa phân loại <span class="year-count">' + unclassified[0].cards.length + ' card</span></h2>';
+      html += '<p class="page-sub">Các card này chưa gắn set — sửa card để gắn set rồi theo dõi tiến độ.</p>';
+      html += '<div class="set-grid"><div class="set-card"><div class="set-name">Chưa phân loại</div>' +
+        '<div class="set-stat"><span>' + unclassified[0].cards.length + ' loại card</span><span>' + uq + ' thẻ tồn</span></div></div></div>';
+    }
+    return html;
+  }
+
+  function setCardHTML(x) {
+    var g = x.g, p = x.p, info = g.info;
+    var link = '#/sets/' + encodeURIComponent(g.key);
+    var html = '<a class="set-card" href="' + link + '">';
+    html += '<div class="set-name">' + BCT.esc(info.name) + '</div>';
+    if (info.year != null) html += '<div class="set-year">' + info.year + '</div>';
+    if (p.total != null) {
+      html += '<div class="progress"><div class="progress-bar" style="width:' + p.pct + '%"></div></div>';
+      html += '<div class="set-progress-num">' + p.unique + '/' + p.total + ' lá <span class="mono">(' + p.pct + '%)</span></div>';
+      html += '<div class="set-stat"><span>Còn thiếu <b>' + p.missing + '</b> lá</span><span>Tồn <b>' + p.qty + '</b> thẻ</span></div>';
+    } else {
+      html += '<div class="set-unknown">Chưa rõ tổng số lá của set này</div>';
+      html += '<div class="set-manual"><input inputmode="numeric" placeholder="VD: 198" data-setkey="' + BCT.esc(g.key) + '">' +
+        '<button class="btn secondary btn-sm" data-setkey="' + BCT.esc(g.key) + '">Lưu</button></div>';
+      html += '<div class="set-stat"><span>Tồn <b>' + p.qty + '</b> thẻ</span></div>';
+    }
+    html += '<div class="set-stat"><span>Giá trị kho <b class="mono">' + BCT.fmtVND(p.value) + '</b></span>';
+    if (p.secrets.length) html += '<span class="secret-tag">' + p.secrets.length + ' secret</span>';
+    html += '</div></a>';
+    return html;
+  }
+
+  /* ================= VIEW: CHECKLIST 1 SET ================= */
+  var setDetailFilter = { missingOnly: false };
+
+  function vSetDetail(key) {
+    var groups = BCT.setGroups(S);
+    var g = null;
+    for (var i = 0; i < groups.length; i++) if (groups[i].key === key) { g = groups[i]; break; }
+    if (!g) return '<a class="backlink" href="#/sets">' + IC.back + ' Bộ sưu tập</a><div class="empty"><h3>Không tìm thấy set</h3></div>';
+    var info = g.info;
+    var p = BCT.setProgress(S, g);
+    var missingOnly = setDetailFilter.missingOnly;
+
+    var html = '<a class="backlink" href="#/sets">' + IC.back + ' Bộ sưu tập</a>';
+    html += '<h1 class="page-title">' + BCT.esc(info.name) + '</h1>';
+    html += '<p class="page-sub">' + (info.year != null ? 'Phát hành <b>' + info.year + '</b> · ' : '') +
+      (p.total != null ? '<b>' + p.unique + '/' + p.total + ' lá</b> (' + p.pct + '%)' +
+        (info.official != null ? ' · ' + info.official + ' lá chính + ' + (p.total - info.official) + ' secret' : '') : 'Chưa rõ tổng số lá') +
+      ' · tồn ' + p.qty + ' thẻ · giá trị kho ' + BCT.fmtVND(p.value) + '</p>';
+
+    if (p.rarest.length) {
+      html += '<div class="panel" style="margin-bottom:18px"><div class="panel-head"><h2 class="panel-title">Lá hiếm nhất đang có</h2></div>';
+      html += '<div class="rarest-row">' + p.rarest.map(function (c) {
+        return '<a class="rarest-chip" href="#/kho/' + c.id + '"><span class="secret-tag">' + BCT.esc(c.rarity) + '</span> ' + BCT.esc(c.name) +
+          ' <span class="mono">#' + BCT.esc(c.number || '?') + '</span></a>';
+      }).join('') + '</div></div>';
+    }
+
+    if (p.total == null) {
+      html += '<div class="empty"><h3>Chưa rõ tổng số lá</h3><p>Nhập tổng số lá của set này để hiện checklist.</p>' +
+        '<div class="set-manual" style="justify-content:center;max-width:340px;margin:0 auto"><input inputmode="numeric" placeholder="VD: 198" data-setkey="' + BCT.esc(g.key) + '">' +
+        '<button class="btn" data-setkey="' + BCT.esc(g.key) + '">Lưu tổng số lá</button></div></div>';
+      return html;
+    }
+
+    html += '<div class="toolbar"><label class="chk"><input type="checkbox" id="sd-missing"' + (missingOnly ? ' checked' : '') + '> Chỉ hiện lá thiếu</label></div>';
+    html += '<div class="num-grid">';
+    for (var n = 1; n <= p.total; n++) {
+      var ids = p.ownedNums[n];
+      var isSecret = info.official != null && n > info.official;
+      if (missingOnly && ids) continue;
+      if (ids) {
+        var cid = ids[0];
+        var c = BCT.getCard(S, cid);
+        var q = BCT.stockOf(S, cid);
+        html += '<a class="num-cell owned' + (isSecret ? ' secret' : '') + '" href="#/kho/' + cid + '" title="' + BCT.esc(c ? c.name : '') + (c && c.rarity ? ' — ' + BCT.esc(c.rarity) : '') + '">' +
+          '<span class="num-n">' + n + '</span><span class="num-qty">' + q + '</span>' +
+          (isSecret ? '<span class="num-secret">SECRET</span>' : '') + '</a>';
+      } else {
+        html += '<span class="num-cell missing' + (isSecret ? ' secret' : '') + '" title="Lá số ' + n + ' — chưa có"><span class="num-n">' + n + '</span>' +
+          (isSecret ? '<span class="num-secret">SECRET</span>' : '') + '</span>';
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /* ================= VIEW: SỬA CARD ================= */
+  function vCardEdit(id) {
+    var c = BCT.getCard(S, id);
+    if (!c) return '<a class="backlink" href="#/kho">' + IC.back + ' Kho card</a><div class="empty"><h3>Không tìm thấy card</h3></div>';
+    var html = '<a class="backlink" href="#/kho/' + c.id + '">' + IC.back + ' ' + BCT.esc(c.name) + '</a>';
+    html += '<h1 class="page-title">Sửa card</h1><p class="page-sub">Cập nhật thông tin card — không ảnh hưởng các lô nhập & đơn đã bán</p>';
+    html += '<form id="f-edit"><section class="panel"><div class="form-grid">';
+    html += '<div class="field"><label>Tên card *</label><input id="e-name" value="' + BCT.esc(c.name) + '"></div>';
+    html += '<div class="field"><label>Set</label><input id="e-set" list="set-list" value="' + BCT.esc(c.set || '') + '" autocomplete="off"><datalist id="set-list">' + setDatalistOptions() + '</datalist><div class="hint" id="e-set-hint">' + setHintHTML(c.set || '') + '</div></div>';
+    html += '<div class="field"><label>Số thứ tự trong set</label><input id="e-number" value="' + BCT.esc(c.number || '') + '" placeholder="VD: 025"></div>';
+    html += '<div class="field"><label>Độ hiếm</label><select id="e-rarity"><option value="">— Chọn —</option>' +
+      BCT.RARITIES.map(function (r) { return '<option' + (c.rarity === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></div>';
+    html += '<div class="field"><label>Condition</label><select id="e-cond">' +
+      ['NM', 'LP', 'MP'].map(function (k) { return '<option' + (c.condition === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></div>';
+    html += '<div class="field"><label>Graded</label><div style="display:flex;gap:8px"><select id="e-graded-org" style="flex:1"><option value="">Không graded</option>' +
+      ['PSA', 'BGS'].map(function (o) { return '<option' + (c.graded && c.graded.org === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') +
+      '</select><input id="e-graded-score" placeholder="Điểm" style="width:80px" inputmode="decimal" value="' + BCT.esc(c.graded ? c.graded.score : '') + '"></div></div>';
+    html += '<div class="field full"><label>Ghi chú</label><textarea id="e-note">' + BCT.esc(c.note || '') + '</textarea></div>';
+    html += '</div><div class="form-actions"><button class="btn" type="submit">' + IC.check + ' Lưu thay đổi</button><a class="btn secondary" href="#/kho/' + c.id + '" style="text-decoration:none">Hủy</a></div>';
+    html += '</section></form>';
+    return html;
+  }
+
   /* ================= VIEW: NHẬP KHO ================= */
   var pendingImages = [];
+
+  function setDatalistOptions() {
+    if (!window.BCT_SETS) return '';
+    return window.BCT_SETS.list.map(function (s) {
+      return '<option value="' + BCT.esc(s.name) + '">';
+    }).join('');
+  }
+
+  // Tìm set theo tên user gõ → hint tổng số lá + setId tương ứng
+  function lookupSetByName(name) {
+    if (!window.BCT_SETS || !name) return null;
+    return window.BCT_SETS.byName(name);
+  }
+
+  function setHintHTML(name) {
+    var s = lookupSetByName(name);
+    if (!s) return 'Gõ tên set hoặc nhập tên khác tự do.';
+    var secret = s.total - s.official;
+    return 'Set này có <b>' + s.official + ' lá chính</b>' + (secret > 0 ? ' + <b>' + secret + ' secret</b>' : '') +
+      ' (tổng ' + s.total + ' lá).';
+  }
 
   function vNhap(prefillCardId) {
     pendingImages = [];
@@ -380,9 +607,11 @@
       '</select></div>';
     html += '<div id="new-card-fields" style="display:contents">' +
       '<div class="field"><label>Tên card *</label><input id="n-name" placeholder="VD: Charizard ex"></div>' +
-      '<div class="field"><label>Set</label><input id="n-set" placeholder="VD: 151"></div>' +
-      '<div class="field"><label>Mã số</label><input id="n-number" placeholder="VD: 006/165"></div>' +
-      '<div class="field"><label>Độ hiếm</label><input id="n-rarity" list="rarity-list" placeholder="VD: Ultra Rare"><datalist id="rarity-list"><option>Common</option><option>Uncommon</option><option>Rare</option><option>Double Rare</option><option>Ultra Rare</option><option>Secret Rare</option><option>Special Illustration Rare</option><option>Alternate Art Secret</option><option>Promo</option></datalist></div>' +
+      '<div class="field"><label>Set</label><input id="n-set" list="set-list" placeholder="Gõ để tìm set…" autocomplete="off"><datalist id="set-list">' +
+      setDatalistOptions() + '</datalist><div class="hint" id="n-set-hint">Gõ tên set hoặc nhập tên khác tự do.</div></div>' +
+      '<div class="field"><label>Số thứ tự trong set</label><input id="n-number" placeholder="VD: 025"><div class="hint">Số in góc dưới thẻ, vd 025.</div></div>' +
+      '<div class="field"><label>Độ hiếm</label><select id="n-rarity"><option value="">— Chọn —</option>' +
+      BCT.RARITIES.map(function (r) { return '<option>' + r + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label>Condition</label><select id="n-cond"><option>NM</option><option>LP</option><option>MP</option></select></div>' +
       '<div class="field"><label>Graded</label><div style="display:flex;gap:8px"><select id="n-graded-org" style="flex:1"><option value="">Không graded</option><option>PSA</option><option>BGS</option></select><input id="n-graded-score" placeholder="Điểm" style="width:80px" inputmode="decimal"></div></div>' +
       '<div class="field full"><label>Ghi chú</label><textarea id="n-note" placeholder="Tình trạng, đặc điểm…"></textarea></div>' +
@@ -533,12 +762,73 @@
       $('f-set').addEventListener('change', function (e) { khoFilter.set = e.target.value; rerender(); });
       $('f-rarity').addEventListener('change', function (e) { khoFilter.rarity = e.target.value; rerender(); });
       $('f-sort').addEventListener('change', function (e) { khoFilter.sort = e.target.value; rerender(); });
+      var helpBtn = $('rarity-help'), pop = $('rarity-pop');
+      if (helpBtn && pop) helpBtn.addEventListener('click', function () { pop.hidden = !pop.hidden; });
+    }
+
+    if (base === 'kho' && r.segs[2] === 'edit' && $('f-edit')) {
+      var cid = r.segs[1];
+      var eSet = $('e-set');
+      if (eSet) eSet.addEventListener('input', function (e) { $('e-set-hint').innerHTML = setHintHTML(e.target.value.trim()); });
+      $('f-edit').addEventListener('submit', function (e) {
+        e.preventDefault();
+        try {
+          var c = BCT.getCard(S, cid);
+          if (!c) throw new Error('Không tìm thấy card.');
+          var nm = $('e-name').value.trim();
+          if (!nm) throw new Error('Nhập tên card.');
+          var setName = eSet.value.trim();
+          var hit = lookupSetByName(setName);
+          c.name = nm; c.set = setName; c.setId = hit ? hit.id : null;
+          c.number = $('e-number').value.trim(); c.rarity = $('e-rarity').value;
+          c.condition = $('e-cond').value;
+          var gOrg = $('e-graded-org').value, gScore = $('e-graded-score').value.trim();
+          c.graded = gOrg ? { org: gOrg, score: gScore || '' } : null;
+          c.note = $('e-note').value.trim();
+          persist(); toast('Đã lưu thay đổi.');
+          location.hash = '#/kho/' + cid;
+        } catch (err) { toast(err.message); }
+      });
+    }
+
+    if (base === 'sets') {
+      // nút lưu tổng số lá thủ công (cả grid & detail)
+      Array.prototype.forEach.call(document.querySelectorAll('[data-setkey]'), function (el) {
+        if (el.tagName === 'BUTTON') {
+          el.addEventListener('click', function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            var key = el.getAttribute('data-setkey');
+            var wrap = el.parentElement;
+            var input = wrap ? wrap.querySelector('input') : null;
+            try {
+              BCT.setManualTotal(S, key, input ? input.value : '');
+              persist(); toast('Đã lưu tổng số lá cho set.');
+              render();
+            } catch (err) { toast(err.message); }
+          });
+        } else if (el.tagName === 'INPUT') {
+          // input nằm trong thẻ <a>: chặn navigate khi bấm vào để gõ
+          el.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); });
+          el.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') { ev.preventDefault(); var b = el.parentElement.querySelector('button'); if (b) b.click(); }
+          });
+        }
+      });
+      if (!r.segs[1]) {
+        if ($('s-sort')) $('s-sort').addEventListener('change', function (e) { setFilter.sort = e.target.value; render(); });
+        if ($('s-year')) $('s-year').addEventListener('change', function (e) { setFilter.year = e.target.value; render(); });
+        if ($('s-groupyear')) $('s-groupyear').addEventListener('change', function (e) { setFilter.groupYear = e.target.checked; render(); });
+      } else {
+        if ($('sd-missing')) $('sd-missing').addEventListener('change', function (e) { setDetailFilter.missingOnly = e.target.checked; render(); });
+      }
     }
 
     if (base === 'nhap') {
       var cardSel = $('n-card'), newFields = $('new-card-fields');
       var syncMode = function () { newFields.style.display = cardSel.value === '__new' ? 'contents' : 'none'; };
       cardSel.addEventListener('change', syncMode); syncMode();
+      var setInput = $('n-set');
+      if (setInput) setInput.addEventListener('input', function (e) { $('n-set-hint').innerHTML = setHintHTML(e.target.value.trim()); });
 
       var drop = $('img-drop'), fileInput = $('n-images');
       if (drop) {
@@ -569,10 +859,13 @@
             var name = $('n-name').value.trim();
             if (!name) throw new Error('Nhập tên card.');
             var gOrg = $('n-graded-org').value, gScore = $('n-graded-score').value.trim();
+            var setName = $('n-set').value.trim();
+            var setHit = lookupSetByName(setName);
             var card = {
               id: BCT.uid('card'), name: name,
-              set: $('n-set').value.trim(), number: $('n-number').value.trim(),
-              rarity: $('n-rarity').value.trim(), condition: $('n-cond').value,
+              set: setName, setId: setHit ? setHit.id : null,
+              number: $('n-number').value.trim(),
+              rarity: $('n-rarity').value, condition: $('n-cond').value,
               graded: gOrg ? { org: gOrg, score: gScore || '' } : null,
               images: pendingImages.slice(), note: $('n-note').value.trim(),
               createdAt: new Date().toISOString()

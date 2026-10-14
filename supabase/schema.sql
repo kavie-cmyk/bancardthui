@@ -6,7 +6,8 @@ create table if not exists cards (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   "set" text,
-  number text,
+  set_id text,               -- tcgdex set id, vd 'sv03.5' (để tra tổng số lá/năm phát hành)
+  number text,               -- số thứ tự trong set, vd '025'
   rarity text,
   condition text not null default 'NM' check (condition in ('NM','LP','MP')),
   graded_org text,            -- 'PSA' | 'BGS' | null
@@ -15,6 +16,15 @@ create table if not exists cards (
   created_at timestamptz not null default now()
 );
 create index if not exists idx_cards_name on cards (name);
+create index if not exists idx_cards_set on cards (set_id);
+
+-- Tổng số lá do user nhập tay cho set không có trong danh sách chuẩn
+-- (bản local lưu ở state.setTotals; khi lên Supabase có thể đưa vào bảng này)
+create table if not exists set_totals (
+  set_key text primary key,  -- set_id hoặc tên set
+  total integer not null check (total > 0),
+  updated_at timestamptz not null default now()
+);
 
 -- Mỗi lần nhập = 1 lô. Giá cost & ngày nhập giữ riêng từng lô để tính FIFO.
 create table if not exists inventory_lots (

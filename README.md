@@ -15,11 +15,21 @@ Nút **"Xóa dữ liệu mẫu"** trên thanh header để bắt đầu kho tr�
 
 | Bảng | Trường chính |
 |---|---|
-| `cards` | id, name, set, number, rarity, condition (NM/LP/MP), graded {org, score}, images[] (dataURL), note |
+| `cards` | id, name, set, setId (tcgdex), number, rarity, condition (NM/LP/MP), graded {org, score}, images[] (dataURL), note |
 | `lots` (inventory_lots) | id, cardId, qty, qtyRemaining, costPerUnit (VND), importDate, source |
 | `orders` | id, date, channel (ebay/shopee/facebook/tructiep), items[] {cardId, lotId, qty, sellPrice, costPerUnit}, fees, shippingFee, buyer, note |
+| `setTotals` | {setKey: total} — tổng số lá do user nhập tay cho set không có trong danh sách chuẩn |
 
 `listings` (rao bán) chưa có UI — dành cho Phase 2, schema đã có trong `supabase/schema.sql`.
+
+## Bộ sưu tập theo set (view "Bộ sưu tập")
+
+- Danh sách 220 set lấy từ [TCGdex](https://api.tcgdex.net/v2/en/sets) (`js/sets-db.js`, snapshot 2026-10-14), mỗi set có tổng số lá, số lá chính thức và năm phát hành.
+- Mỗi set hiện progress bar **số lá unique còn hàng ÷ tổng số lá**, số lá thiếu, tổng thẻ tồn, giá trị kho ước tính.
+- Bấm vào set → **checklist** đánh số 1..tổng: lá đã có sáng + badge số lượng, lá thiếu mờ đi; lá có số vượt số lá chính thức gắn tag **SECRET**.
+- Set không tra được tổng số lá → nhập tay ngay trên thẻ set (lưu vào `setTotals`).
+- Filter theo năm phát hành + chế độ **nhóm theo năm** (mới → cũ).
+- Nút **?** ở đầu trang Kho giải thích ký hiệu độ hiếm (● ◆ ★ …) bằng tiếng Việt.
 
 ## FIFO — logic cốt lõi
 

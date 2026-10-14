@@ -46,9 +46,14 @@
 
   var CONDITIONS = { NM: 'Near Mint', LP: 'Lightly Played', MP: 'Moderately Played' };
 
+  // 10 độ hiếm chuẩn dùng trong app (khớp rarity mới của Pokémon TCG)
+  var RARITIES = ['Common', 'Uncommon', 'Rare', 'Double Rare', 'Ultra Rare',
+    'Illustration Rare', 'Special Illustration Rare', 'Hyper Rare', 'ACE SPEC Rare', 'Promo'];
+  var RAREST = ['Hyper Rare', 'Special Illustration Rare'];
+
   // ---------- state ----------
   function blankState() {
-    return { cards: [], lots: [], orders: [], isSeeded: false, createdAt: new Date().toISOString() };
+    return { cards: [], lots: [], orders: [], setTotals: {}, isSeeded: false, createdAt: new Date().toISOString() };
   }
 
   var mem = (typeof localStorage === 'undefined');
@@ -70,6 +75,7 @@
     try {
       var s = JSON.parse(raw);
       s.cards = s.cards || []; s.lots = s.lots || []; s.orders = s.orders || [];
+      s.setTotals = s.setTotals || {}; // backfill cho state cũ
       return s;
     } catch (e) { return blankState(); }
   }
@@ -294,10 +300,124 @@
     }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
   }
 
+  // ---------- bộ sưu tập theo set ----------
+  function setsDB() {
+    var g = (typeof window !== 'undefined') ? window
+      : ((typeof globalThis !== 'undefined') ? globalThis : null);
+    return (g && g.BCT_SETS) ? g.BCT_SETS : null;
+  }
+
+  // Trích số thứ tự từ chuỗi collector number ("006"→6, "SWSH230"→230, "006/165"→6)
+  function parseCardNumber(num) {
+    var m = String(num == null ? '' : num).match(/\d+/);
+    if (!m) return null;
+    var n = parseInt(m[0], 10);
+    return n > 0 ? n : null;
+  }
+
+  // Phân giải thông tin set của card. Thứ tự: db theo setId → db theo tên chính xác
+  // → user tự nhập (state.setTotals) → null (chưa rõ).
+  // Trả về { key, id, name, total, official, year, source }
+  function resolveSet(state, cardOrKey) {
+    var key, setId = null, name = null;
+    if (typeof cardOrKey === 'string') { key = cardOrKey; }
+    else { setId = cardOrKey.setId || null; name = cardOrKey.set || null; key = setId || name || ''; }
+    var db = setsDB(), info = null;
+    if (db) {
+      if (setId) info = db.byId(setId);
+      if (!info && name) info = db.byName(name);
+      if (!info && typeof cardOrKey === 'string') info = db.byId(key) || db.byName(key);
+    }
+    if (info) {
+      return { key: info.id, id: info.id, name: info.name, total: info.total,
+        official: info.official, year: info.year == null ? null : info.year, source: 'db' };
+    }
+    if (key && state.setTotals && state.setTotals[key] != null) {
+      var t = Math.floor(Number(state.setTotals[key]));
+      if (t > 0) return { key: key, id: null, name: name || key, total: t, official: null, year: null, source: 'manual' };
+    }
+    return { key: key, id: null, name: name || key || 'Chưa phân loại', total: null, official: null, year: null, source: null };
+  }
+
+  function isSecretCard(card, info) {
+    var n = parseCardNumber(card.number);
+    return n != null && info.official != null && n > info.official;
+  }
+
+  // Gom card theo set (key chuẩn = set id trong db nếu phân giải được)
+  function setGroups(state) {
+    var map = {};
+    state.cards.forEach(function (c) {
+      var info = resolveSet(state, c);
+      var k = info.key || '__none__';
+      if (!map[k]) map[k] = { key: k, info: info, cards: [] };
+      if (info.source === 'db' && map[k].info.source !== 'db') map[k].info = info;
+      map[k].cards.push(c);
+    });
+    return Object.keys(map).map(function (k) { return map[k]; });
+  }
+
+  // Tiến độ sưu tập của 1 set: unique số thứ tự còn hàng ÷ tổng số lá
+  function setProgress(state, group) {
+    var info = group.info;
+    var total = info.total;
+    var ownedNums = {};
+    var qty = 0, value = 0;
+    group.cards.forEach(function (c) {
+      var s = stockOf(state, c.id);
+      qty += s;
+      value += s * avgCostOf(state, c.id);
+      if (s > 0) {
+        var n = parseCardNumber(c.number);
+        if (n != null && (total == null || n <= total)) {
+          (ownedNums[n] = ownedNums[n] || []).push(c.id);
+        }
+      }
+    });
+    var unique = Object.keys(ownedNums).length;
+    var secrets = group.cards.filter(function (c) {
+      return stockOf(state, c.id) > 0 && isSecretCard(c, info);
+    });
+    var rarest = group.cards.filter(function (c) {
+      return stockOf(state, c.id) > 0 && RAREST.indexOf(c.rarity) >= 0;
+    });
+    return {
+      total: total, official: info.official, unique: unique,
+      missing: total != null ? total - unique : null,
+      qty: qty, value: value, ownedNums: ownedNums,
+      secrets: secrets, rarest: rarest,
+      pct: total ? Math.round(unique / total * 100) : null
+    };
+  }
+
+  function setManualTotal(state, key, total) {
+    total = Math.floor(Number(total));
+    if (!(total > 0)) throw new Error('Tổng số lá phải lớn hơn 0.');
+    state.setTotals[key] = total;
+  }
+
+  function yearGroups(state) {
+    // Gom setGroups theo năm phát hành (mới → cũ), set không rõ năm vào cuối
+    var groups = setGroups(state);
+    var map = {};
+    groups.forEach(function (g) {
+      var y = g.info.year;
+      var k = y == null ? '__unknown__' : String(y);
+      if (!map[k]) map[k] = { year: y, groups: [] };
+      map[k].groups.push(g);
+    });
+    return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) {
+      if (a.year == null) return 1;
+      if (b.year == null) return -1;
+      return b.year - a.year;
+    });
+  }
+
   var BCT = {
     STORAGE_KEY: STORAGE_KEY,
     CHANNELS: CHANNELS,
     CONDITIONS: CONDITIONS,
+    RARITIES: RARITIES,
     uid: uid, fmtVND: fmtVND, fmtDate: fmtDate, todayISO: todayISO, esc: esc,
     blankState: blankState, load: load, save: save, wipe: wipe,
     previewFIFO: previewFIFO, consumeFIFO: consumeFIFO, lotsSorted: lotsSorted,
@@ -306,7 +426,10 @@
     createOrder: createOrder,
     totals: totals, weeklySeries: weeklySeries, topSellers: topSellers,
     slowMovers: slowMovers, lowStock: lowStock,
-    priceHistory: priceHistory, ordersOfCard: ordersOfCard
+    priceHistory: priceHistory, ordersOfCard: ordersOfCard,
+    parseCardNumber: parseCardNumber, resolveSet: resolveSet, isSecretCard: isSecretCard,
+    setGroups: setGroups, setProgress: setProgress, setManualTotal: setManualTotal,
+    yearGroups: yearGroups
   };
 
   root.BCT = BCT;

@@ -45,7 +45,7 @@
   function addCard(state, def) {
     var card = {
       id: BCT.uid('card'),
-      name: def.name, set: def.set, number: def.number, rarity: def.rarity,
+      name: def.name, set: def.set, setId: def.setId || null, number: def.number, rarity: def.rarity,
       condition: def.condition || 'NM',
       graded: def.graded || null,
       images: [foilImage(def.name, def.hue || 40)],
@@ -83,42 +83,42 @@
   function buildSeed() {
     var state = BCT.blankState();
 
-    addCard(state, { name: 'Charizard ex', set: '151', number: '006/165', rarity: 'Special Illustration Rare', hue: 18, condition: 'NM',
+    addCard(state, { name: 'Charizard ex', set: '151', setId: 'sv03.5', number: '006', rarity: 'Special Illustration Rare', hue: 18, condition: 'NM',
       lots: [
         { qty: 5, cost: 900000, date: d(55), source: 'Nhóm Zalo TCG' },
         { qty: 3, cost: 1150000, date: d(19), source: 'Shop HN' }
       ]});
-    addCard(state, { name: 'Pikachu VMAX', set: 'Vivid Voltage', number: '044/185', rarity: 'Secret Rare', hue: 48, condition: 'NM',
+    addCard(state, { name: 'Pikachu VMAX', set: 'Vivid Voltage', setId: 'swsh4', number: '044', rarity: 'Hyper Rare', hue: 48, condition: 'NM',
       lots: [
         { qty: 10, cost: 120000, date: d(70), source: 'Chợ TCG' },
         { qty: 4, cost: 95000, date: d(14), source: 'Facebook' }
       ]});
-    addCard(state, { name: 'Umbreon VMAX', set: 'Evolving Skies', number: '215/203', rarity: 'Alternate Art Secret', hue: 260, condition: 'NM',
+    addCard(state, { name: 'Umbreon VMAX', set: 'Evolving Skies', setId: 'swsh7', number: '215', rarity: 'Special Illustration Rare', hue: 260, condition: 'NM',
       graded: { org: 'PSA', score: 10 },
       lots: [
         { qty: 2, cost: 2800000, date: d(77), source: 'Đấu giá eBay' },
         { qty: 1, cost: 3100000, date: d(32), source: 'Collector SG' }
       ]});
-    addCard(state, { name: 'Gengar ex', set: '151', number: '094/165', rarity: 'Double Rare', hue: 280, condition: 'NM',
+    addCard(state, { name: 'Gengar ex', set: '151', setId: 'sv03.5', number: '094', rarity: 'Double Rare', hue: 280, condition: 'NM',
       lots: [
         { qty: 8, cost: 45000, date: d(42), source: 'Shop HN' },
         { qty: 6, cost: 38000, date: d(9), source: 'Chợ TCG' }
       ]});
-    addCard(state, { name: 'Mew ex', set: '151', number: '151/165', rarity: 'Special Illustration Rare', hue: 300, condition: 'LP',
+    addCard(state, { name: 'Mew ex', set: '151', setId: 'sv03.5', number: '151', rarity: 'Special Illustration Rare', hue: 300, condition: 'LP',
       lots: [{ qty: 3, cost: 650000, date: d(60), source: 'Nhóm Zalo TCG' }] });
-    addCard(state, { name: 'Rayquaza VMAX', set: 'Evolving Skies', number: '111/203', rarity: 'Ultra Rare', hue: 140, condition: 'NM',
+    addCard(state, { name: 'Rayquaza VMAX', set: 'Evolving Skies', setId: 'swsh7', number: '111', rarity: 'Ultra Rare', hue: 140, condition: 'NM',
       lots: [
         { qty: 6, cost: 150000, date: d(85), source: 'Chợ TCG' },
         { qty: 4, cost: 180000, date: d(47), source: 'Facebook' }
       ]});
     // Ví dụ điển hình: cùng 1 card, nhập 10k rồi 20k
-    addCard(state, { name: 'Eevee', set: 'SWSH Promo', number: 'SWSH230', rarity: 'Promo', hue: 32, condition: 'NM',
+    addCard(state, { name: 'Eevee', set: 'SWSH Promo', setId: 'swshp', number: 'SWSH230', rarity: 'Promo', hue: 32, condition: 'NM',
       note: 'Promo Eevee — nhập 2 đợt giá khác nhau',
       lots: [
         { qty: 20, cost: 10000, date: d(26), source: 'Chợ TCG' },
         { qty: 15, cost: 20000, date: d(6), source: 'Shop HN' }
       ]});
-    addCard(state, { name: 'Lugia V', set: 'Silver Tempest', number: '138/195', rarity: 'Ultra Rare', hue: 200, condition: 'NM',
+    addCard(state, { name: 'Lugia V', set: 'Silver Tempest', setId: 'swsh12', number: '138', rarity: 'Ultra Rare', hue: 200, condition: 'NM',
       lots: [{ qty: 4, cost: 220000, date: d(65), source: 'Đấu giá eBay' }] });
 
     // ~10 đơn trong 8 tuần qua, đủ 4 kênh
