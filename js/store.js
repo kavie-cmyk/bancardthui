@@ -51,6 +51,9 @@
     'Illustration Rare', 'Special Illustration Rare', 'Hyper Rare', 'ACE SPEC Rare', 'Promo'];
   var RAREST = ['Hyper Rare', 'Special Illustration Rare'];
 
+  // Phiên bản in của từng lô (finish): bản thường / holo các loại
+  var VARIANTS = ['Normal', 'Reverse Holo', 'Holo', '1st Edition'];
+
   // ---------- state ----------
   function blankState() {
     return { cards: [], lots: [], orders: [], setTotals: {}, isSeeded: false, createdAt: new Date().toISOString() };
@@ -76,6 +79,7 @@
       var s = JSON.parse(raw);
       s.cards = s.cards || []; s.lots = s.lots || []; s.orders = s.orders || [];
       s.setTotals = s.setTotals || {}; // backfill cho state cũ
+      s.lots.forEach(function (l) { if (!l.variant) l.variant = 'Normal'; }); // backfill variant
       return s;
     } catch (e) { return blankState(); }
   }
@@ -138,6 +142,16 @@
 
   function stockOf(state, cardId) {
     return lotsSorted(state, cardId).reduce(function (t, l) { return t + l.qtyRemaining; }, 0);
+  }
+
+  // Breakdown số thẻ còn lại theo phiên bản in (dùng cho chế độ Master checklist)
+  function variantBreakdown(state, cardId) {
+    var map = {};
+    lotsSorted(state, cardId).forEach(function (l) {
+      var v = l.variant || 'Normal';
+      map[v] = (map[v] || 0) + l.qtyRemaining;
+    });
+    return Object.keys(map).map(function (v) { return { variant: v, qty: map[v] }; });
   }
 
   function avgCostOf(state, cardId) {
@@ -418,10 +432,12 @@
     CHANNELS: CHANNELS,
     CONDITIONS: CONDITIONS,
     RARITIES: RARITIES,
+    VARIANTS: VARIANTS,
     uid: uid, fmtVND: fmtVND, fmtDate: fmtDate, todayISO: todayISO, esc: esc,
     blankState: blankState, load: load, save: save, wipe: wipe,
     previewFIFO: previewFIFO, consumeFIFO: consumeFIFO, lotsSorted: lotsSorted,
     getCard: getCard, stockOf: stockOf, avgCostOf: avgCostOf, cardByName: cardByName,
+    variantBreakdown: variantBreakdown,
     orderRevenue: orderRevenue, orderCost: orderCost, orderProfit: orderProfit, orderQty: orderQty,
     createOrder: createOrder,
     totals: totals, weeklySeries: weeklySeries, topSellers: topSellers,

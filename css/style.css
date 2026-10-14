@@ -375,3 +375,23 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
   background: rgba(232,180,74,0.05);
 }
 .rarest-chip:hover { border-color: var(--gold-dim); }
+
+/* ---- checklist: mode toggle + slot panel + variants ---- */
+.seg { display: inline-flex; border: 1px solid var(--line-soft); border-radius: 10px; overflow: hidden; }
+.seg button { background: transparent; border: 0; color: var(--muted); padding: 8px 16px; font: inherit; font-size: 13px; cursor: pointer; }
+.seg button.on { background: rgba(232,180,74,.14); color: var(--gold); font-weight: 600; }
+button.num-cell { font-family: inherit; cursor: pointer; padding: 0; }
+.num-stack { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.num-var { display: block; font-size: 8.5px; color: var(--muted); line-height: 1.35; text-align: center; }
+.num-add { position: absolute; top: 3px; right: 6px; font-size: 10px; color: var(--gold); opacity: 0; font-weight: 700; }
+a.num-cell.missing:hover { opacity: .8; border-color: var(--gold-dim); }
+a.num-cell.missing:hover .num-add { opacity: 1; }
+.vchip { display: inline-block; font-size: 10.5px; border: 1px solid var(--line-soft); border-radius: 20px; padding: 3px 9px; margin: 2px 5px 2px 0; color: var(--ink); background: rgba(255,255,255,.03); }
+.slot-overlay { position: fixed; inset: 0; background: rgba(5,5,8,.72); backdrop-filter: blur(3px); z-index: 60; display: flex; align-items: flex-end; justify-content: center; padding: 16px; }
+@media (min-width: 720px) { .slot-overlay { align-items: center; } }
+.slot-sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; max-width: 540px; width: 100%; max-height: 88vh; overflow: auto; padding: 20px 22px; }
+.slot-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 10px; }
+.slot-head h3 { margin: 0; font-size: 17px; }
+.slot-x { background: none; border: 0; color: var(--muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 4px 8px; }
+.slot-x:hover { color: var(--ink); }
+.slot-card { border: 1px solid var(--line-soft); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }

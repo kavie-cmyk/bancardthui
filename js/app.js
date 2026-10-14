@@ -101,13 +101,14 @@
   function render() {
     var r = route();
     var base = r.segs[0] || 'dashboard';
+    closeSlotPanel();
     renderNav('#/' + base);
     var app = document.getElementById('app');
     window.scrollTo(0, 0);
     if (base === 'dashboard') app.innerHTML = vDashboard();
     else if (base === 'kho') app.innerHTML = (r.segs[1] && r.segs[2] === 'edit') ? vCardEdit(r.segs[1]) : (r.segs[1] ? vCardDetail(r.segs[1]) : vKho());
     else if (base === 'sets') app.innerHTML = r.segs.length > 1 ? vSetDetail(decodeURIComponent(r.segs.slice(1).join('/'))) : vSets();
-    else if (base === 'nhap') app.innerHTML = vNhap(r.query.card || '');
+    else if (base === 'nhap') app.innerHTML = vNhap(r.query);
     else if (base === 'ban') app.innerHTML = vBan(r.query.card || '');
     else if (base === 'donhang') app.innerHTML = r.segs[1] ? vOrderDetail(r.segs[1]) : vDonHang();
     else app.innerHTML = vDashboard();
@@ -342,10 +343,12 @@
     html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Các lô nhập (' + allLots.length + ')</h2><span class="panel-note">FIFO: bán trừ lô cũ nhất trước</span></div>';
     if (!allLots.length) html += '<p class="panel-note">Chưa có lô nào.</p>';
     else {
-      html += '<table class="tbl"><thead><tr><th>Ngày nhập</th><th class="r">Còn lại / Gốc</th><th class="r">Giá cost</th><th>Nguồn</th></tr></thead><tbody>';
+      html += '<table class="tbl"><thead><tr><th>Ngày nhập</th><th class="r">Còn lại / Gốc</th><th class="r">Giá cost</th><th>Phiên bản</th><th>Nguồn</th></tr></thead><tbody>';
       allLots.forEach(function (l, i) {
         html += '<tr><td>' + BCT.fmtDate(l.importDate) + (i === 0 && l.qtyRemaining > 0 ? ' <span class="tag" style="font-size:9px">FIFO trước</span>' : '') + '</td>' +
-          '<td class="r">' + l.qtyRemaining + ' / ' + l.qty + '</td><td class="r">' + BCT.fmtVND(l.costPerUnit) + '</td><td>' + BCT.esc(l.source || '—') + '</td></tr>';
+          '<td class="r">' + l.qtyRemaining + ' / ' + l.qty + '</td><td class="r">' + BCT.fmtVND(l.costPerUnit) + '</td>' +
+          '<td><span class="tag">' + BCT.esc(l.variant || 'Normal') + '</span></td>' +
+          '<td>' + BCT.esc(l.source || '—') + '</td></tr>';
       });
       html += '</tbody></table>';
     }
@@ -494,7 +497,7 @@
   }
 
   /* ================= VIEW: CHECKLIST 1 SET ================= */
-  var setDetailFilter = { missingOnly: false };
+  var setDetailFilter = { missingOnly: false, mode: 'set' };
 
   function vSetDetail(key) {
     var groups = BCT.setGroups(S);
@@ -504,6 +507,7 @@
     var info = g.info;
     var p = BCT.setProgress(S, g);
     var missingOnly = setDetailFilter.missingOnly;
+    var mode = setDetailFilter.mode || 'set';
 
     var html = '<a class="backlink" href="#/sets">' + IC.back + ' Bộ sưu tập</a>';
     html += '<h1 class="page-title">' + BCT.esc(info.name) + '</h1>';
@@ -527,7 +531,12 @@
       return html;
     }
 
-    html += '<div class="toolbar"><label class="chk"><input type="checkbox" id="sd-missing"' + (missingOnly ? ' checked' : '') + '> Chỉ hiện lá thiếu</label></div>';
+    html += '<div class="toolbar"><div class="seg" id="sd-mode">' +
+      '<button type="button" data-mode="set"' + (mode === 'set' ? ' class="on"' : '') + '>Set chuẩn</button>' +
+      '<button type="button" data-mode="master"' + (mode === 'master' ? ' class="on"' : '') + '>Master</button></div>' +
+      '<label class="chk"><input type="checkbox" id="sd-missing"' + (missingOnly ? ' checked' : '') + '> Chỉ hiện lá thiếu</label>' +
+      (mode === 'master' ? '<span class="panel-note" style="margin:0">Chế độ Master: xem breakdown phiên bản từng ô — tiến độ set không đổi.</span>' : '') +
+      '</div>';
     html += '<div class="num-grid">';
     for (var n = 1; n <= p.total; n++) {
       var ids = p.ownedNums[n];
@@ -537,16 +546,108 @@
         var cid = ids[0];
         var c = BCT.getCard(S, cid);
         var q = BCT.stockOf(S, cid);
-        html += '<a class="num-cell owned' + (isSecret ? ' secret' : '') + '" href="#/kho/' + cid + '" title="' + BCT.esc(c ? c.name : '') + (c && c.rarity ? ' — ' + BCT.esc(c.rarity) : '') + '">' +
-          '<span class="num-n">' + n + '</span><span class="num-qty">' + q + '</span>' +
-          (isSecret ? '<span class="num-secret">SECRET</span>' : '') + '</a>';
+        var masterExtra = '';
+        if (mode === 'master') {
+          var bd = BCT.variantBreakdown(S, cid);
+          masterExtra = '<span class="num-var">' + bd.map(function (b) {
+            return BCT.esc(b.variant) + ' ×' + b.qty;
+          }).join(' · ') + '</span>';
+        }
+        html += '<button type="button" class="num-cell owned' + (isSecret ? ' secret' : '') + '" data-num="' + n + '" title="' + BCT.esc(c ? c.name : '') + (c && c.rarity ? ' — ' + BCT.esc(c.rarity) : '') + ' — bấm để xem/sửa">' +
+          '<span class="num-stack"><span class="num-n">' + n + '</span>' + masterExtra + '</span><span class="num-qty">×' + q + '</span>' +
+          (isSecret ? '<span class="num-secret">SECRET</span>' : '') + '</button>';
       } else {
-        html += '<span class="num-cell missing' + (isSecret ? ' secret' : '') + '" title="Lá số ' + n + ' — chưa có"><span class="num-n">' + n + '</span>' +
-          (isSecret ? '<span class="num-secret">SECRET</span>' : '') + '</span>';
+        html += '<a class="num-cell missing' + (isSecret ? ' secret' : '') + '" href="#/nhap?newcard=1&setkey=' + encodeURIComponent(g.key) + '&num=' + n + '" title="Lá số ' + n + ' — chưa có. Bấm để nhập lá này"><span class="num-n">' + n + '</span><span class="num-add">+ thêm</span>' +
+          (isSecret ? '<span class="num-secret">SECRET</span>' : '') + '</a>';
       }
     }
     html += '</div>';
     return html;
+  }
+
+  function closeSlotPanel() {
+    var ov = document.getElementById('slot-overlay');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  }
+
+  // Panel thao tác khi bấm vào 1 ô đã có trong checklist:
+  // xem card đang chiếm ô + Sửa lá + Đổi số/set + Gỡ khỏi set
+  function openSlotPanel(key, n) {
+    closeSlotPanel();
+    var groups = BCT.setGroups(S);
+    var g = null;
+    for (var i = 0; i < groups.length; i++) if (groups[i].key === key) { g = groups[i]; break; }
+    if (!g) return;
+    var info = g.info;
+    var p = BCT.setProgress(S, g);
+    var ids = p.ownedNums[n] || [];
+    if (!ids.length) return;
+
+    var html = '<div class="slot-sheet">';
+    html += '<div class="slot-head"><h3>Lá số <span class="mono">' + n + '</span> — ' + BCT.esc(info.name) + '</h3><button type="button" class="slot-x" id="slot-close">×</button></div>';
+
+    ids.forEach(function (cid) {
+      var c = BCT.getCard(S, cid);
+      if (!c) return;
+      var bd = BCT.variantBreakdown(S, cid);
+      html += '<div class="slot-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>' + BCT.esc(c.name) + '</b><span class="mono">' + BCT.stockOf(S, cid) + ' thẻ</span></div>';
+      html += '<div style="margin:6px 0">' + (c.rarity ? '<span class="tag">' + BCT.esc(c.rarity) + '</span>' : '') + '</div>';
+      html += '<div>' + bd.map(function (b) { return '<span class="vchip">' + BCT.esc(b.variant) + ' ×' + b.qty + '</span>'; }).join('') + '</div>';
+      html += '<div class="form-actions" style="margin-top:8px"><a class="btn secondary btn-sm" href="#/kho/' + cid + '" style="text-decoration:none">Chi tiết</a>' +
+        '<a class="btn secondary btn-sm" href="#/kho/' + cid + '/edit" style="text-decoration:none">' + IC.edit + ' Sửa lá</a></div></div>';
+    });
+
+    html += '<h4 style="margin:14px 0 8px;font-size:14px">Đổi số / set của lá này</h4>';
+    html += '<div class="form-grid">';
+    if (ids.length > 1) {
+      html += '<div class="field full"><label>Lá cần đổi</label><select id="sp-card">' + ids.map(function (cid) {
+        var c = BCT.getCard(S, cid);
+        return '<option value="' + cid + '">' + BCT.esc(c ? c.name : cid) + '</option>';
+      }).join('') + '</select></div>';
+    }
+    html += '<div class="field"><label>Số thứ tự mới</label><input id="sp-number" inputmode="numeric" value="' + n + '"></div>';
+    html += '<div class="field"><label>Set</label><input id="sp-set" list="set-list" autocomplete="off" value="' + BCT.esc(info.name || '') + '"><datalist id="set-list">' + setDatalistOptions() + '</datalist><div class="hint">Gõ tên set trong danh sách 220 set.</div></div>';
+    html += '<div class="field"><label>Độ hiếm</label><select id="sp-rarity"><option value="">— Giữ nguyên —</option>' +
+      BCT.RARITIES.map(function (r) { return '<option>' + r + '</option>'; }).join('') + '</select></div>';
+    html += '</div>';
+    html += '<div class="form-actions"><button type="button" class="btn" id="sp-save">' + IC.check + ' Lưu</button>' +
+      '<button type="button" class="btn secondary" id="sp-unassign">Gỡ khỏi set</button></div>';
+    html += '<p class="panel-note" style="margin-top:8px">Đổi số/set chỉ dời lá bài — các lô nhập & đơn đã bán giữ nguyên, tiến độ set cập nhật ngay.</p>';
+    html += '</div>';
+
+    var ov = document.createElement('div');
+    ov.className = 'slot-overlay';
+    ov.id = 'slot-overlay';
+    ov.innerHTML = html;
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) { if (e.target === ov) closeSlotPanel(); });
+    document.getElementById('slot-close').addEventListener('click', closeSlotPanel);
+
+    var multi = ids.length > 1;
+    var targetId = function () {
+      if (!multi) return ids[0];
+      var sel = document.getElementById('sp-card');
+      return (sel && sel.value) ? sel.value : ids[0];
+    };
+    document.getElementById('sp-save').addEventListener('click', function () {
+      try {
+        var c = BCT.getCard(S, targetId());
+        if (!c) throw new Error('Không tìm thấy card.');
+        var setName = document.getElementById('sp-set').value.trim();
+        var hit = lookupSetByName(setName);
+        c.number = document.getElementById('sp-number').value.trim();
+        c.set = setName;
+        c.setId = hit ? hit.id : null;
+        var rar = document.getElementById('sp-rarity').value;
+        if (rar) c.rarity = rar;
+        persist(); closeSlotPanel(); toast('Đã cập nhật lá bài.'); render();
+      } catch (err) { toast(err.message); }
+    });
+    document.getElementById('sp-unassign').addEventListener('click', function () {
+      if (!confirm('Gỡ lá này khỏi set? Card vẫn nằm trong Kho.')) return;
+      var c = BCT.getCard(S, targetId());
+      if (c) { c.setId = null; c.set = ''; persist(); closeSlotPanel(); toast('Đã gỡ khỏi set.'); render(); }
+    });
   }
 
   /* ================= VIEW: SỬA CARD ================= */
@@ -596,20 +697,29 @@
       ' (tổng ' + s.total + ' lá).';
   }
 
-  function vNhap(prefillCardId) {
+  function vNhap(q) {
+    q = q || {};
     pendingImages = [];
+    var prefillCardId = q.card || '';
+    // Prefill từ checklist: #/nhap?newcard=1&setkey=<id>&num=<n>
+    var forceNew = q.newcard === '1';
+    var preSetName = '', preNum = q.num || '';
+    if (forceNew && q.setkey && window.BCT_SETS && window.BCT_SETS.byId) {
+      var ps = window.BCT_SETS.byId(q.setkey);
+      if (ps) preSetName = ps.name;
+    }
     var html = '<h1 class="page-title">Nhập kho</h1><p class="page-sub">Mỗi lần nhập là một lô riêng — giá cost khác nhau theo ngày được giữ nguyên để tính FIFO</p>';
     html += '<form id="f-nhap"><section class="panel">';
     html += '<div class="form-grid">';
     html += '<div class="field full"><label>Card</label><select id="n-card">' +
-      '<option value="__new">+ Tạo card mới</option>' +
+      '<option value="__new"' + (forceNew ? ' selected' : '') + '>+ Tạo card mới</option>' +
       S.cards.map(function (c) { return '<option value="' + c.id + '"' + (prefillCardId === c.id ? ' selected' : '') + '>' + BCT.esc(c.name) + ' — ' + BCT.esc(c.set || '') + ' (tồn ' + BCT.stockOf(S, c.id) + ')</option>'; }).join('') +
-      '</select></div>';
+      '</select>' + (forceNew && preSetName ? '<div class="hint" style="margin-top:6px">Đang thêm lá số <b class="mono">' + BCT.esc(preNum) + '</b> vào set <b>' + BCT.esc(preSetName) + '</b> (từ checklist).</div>' : '') + '</div>';
     html += '<div id="new-card-fields" style="display:contents">' +
       '<div class="field"><label>Tên card *</label><input id="n-name" placeholder="VD: Charizard ex"></div>' +
-      '<div class="field"><label>Set</label><input id="n-set" list="set-list" placeholder="Gõ để tìm set…" autocomplete="off"><datalist id="set-list">' +
-      setDatalistOptions() + '</datalist><div class="hint" id="n-set-hint">Gõ tên set hoặc nhập tên khác tự do.</div></div>' +
-      '<div class="field"><label>Số thứ tự trong set</label><input id="n-number" placeholder="VD: 025"><div class="hint">Số in góc dưới thẻ, vd 025.</div></div>' +
+      '<div class="field"><label>Set</label><input id="n-set" list="set-list" placeholder="Gõ để tìm set…" autocomplete="off" value="' + BCT.esc(preSetName) + '"><datalist id="set-list">' +
+      setDatalistOptions() + '</datalist><div class="hint" id="n-set-hint">' + setHintHTML(preSetName) + '</div></div>' +
+      '<div class="field"><label>Số thứ tự trong set</label><input id="n-number" placeholder="VD: 025" value="' + BCT.esc(preNum) + '"><div class="hint">Số in góc dưới thẻ, vd 025.</div></div>' +
       '<div class="field"><label>Độ hiếm</label><select id="n-rarity"><option value="">— Chọn —</option>' +
       BCT.RARITIES.map(function (r) { return '<option>' + r + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label>Condition</label><select id="n-cond"><option>NM</option><option>LP</option><option>MP</option></select></div>' +
@@ -621,6 +731,9 @@
     html += '<div class="field"><label>Giá cost / thẻ (VND) *</label><input id="n-cost" inputmode="numeric" placeholder="VD: 10.000"><div class="hint">Giá vốn của đúng lô này.</div></div>';
     html += '<div class="field"><label>Ngày nhập *</label><input id="n-date" type="date" value="' + BCT.todayISO() + '"></div>';
     html += '<div class="field"><label>Nguồn mua</label><input id="n-source" placeholder="VD: Chợ TCG, Shop HN…"></div>';
+    html += '<div class="field"><label>Phiên bản</label><select id="n-variant">' +
+      BCT.VARIANTS.map(function (v) { return '<option>' + v + '</option>'; }).join('') +
+      '</select><div class="hint">Bản thường / Reverse Holo / Holo / 1st Edition.</div></div>';
     html += '</div>';
     html += '<div class="form-actions"><button class="btn" type="submit">' + IC.check + ' Lưu lô nhập</button><a class="btn secondary" href="#/kho" style="text-decoration:none">Hủy</a></div>';
     html += '</section></form>';
@@ -680,7 +793,7 @@
       var html = '<div class="fifo-box"><h4>Xem trước FIFO — sẽ trừ các lô:</h4>';
       plan.forEach(function (p) {
         var lot = lotById(p.lotId);
-        html += '<div class="fifo-line"><span>' + p.qty + ' thẻ · lô nhập ' + BCT.fmtDate(p.importDate) + (lot && lot.source ? ' (' + BCT.esc(lot.source) + ')' : '') + ' · cost ' + BCT.fmtVND(p.costPerUnit) + '/thẻ</span><span class="mono">' + BCT.fmtVND(p.qty * p.costPerUnit) + '</span></div>';
+        html += '<div class="fifo-line"><span>' + p.qty + ' thẻ · lô nhập ' + BCT.fmtDate(p.importDate) + (lot && lot.source ? ' (' + BCT.esc(lot.source) + ')' : '') + (lot && lot.variant && lot.variant !== 'Normal' ? ' · <b>' + BCT.esc(lot.variant) + '</b>' : '') + ' · cost ' + BCT.fmtVND(p.costPerUnit) + '/thẻ</span><span class="mono">' + BCT.fmtVND(p.qty * p.costPerUnit) + '</span></div>';
       });
       html += '<div class="fifo-total"><span>Tổng vốn của ' + qty + ' thẻ</span><span class="mono">' + BCT.fmtVND(cost) + '</span></div>';
       html += '<div class="panel-note" style="margin-top:8px">Lãi dự kiến = giá bán × ' + qty + ' − ' + BCT.fmtVND(cost) + ' − phí. Tính chính xác khi Bự nhập giá bán.</div></div>';
@@ -744,7 +857,7 @@
       var c = BCT.getCard(S, it.cardId);
       var lot = lotById(it.lotId);
       var lineRev = it.qty * it.sellPrice, lineCost = it.qty * it.costPerUnit;
-      html += '<tr><td><b>' + BCT.esc(c ? c.name : '?') + '</b><span class="lot-tag">lô nhập ' + (lot ? BCT.fmtDate(lot.importDate) : '?') + ' · cost ' + BCT.fmtVND(it.costPerUnit) + '/thẻ' + (lot && lot.source ? ' · ' + BCT.esc(lot.source) : '') + '</span></td>' +
+      html += '<tr><td><b>' + BCT.esc(c ? c.name : '?') + '</b><span class="lot-tag">lô nhập ' + (lot ? BCT.fmtDate(lot.importDate) : '?') + ' · cost ' + BCT.fmtVND(it.costPerUnit) + '/thẻ' + (lot && lot.variant && lot.variant !== 'Normal' ? ' · ' + BCT.esc(lot.variant) : '') + (lot && lot.source ? ' · ' + BCT.esc(lot.source) : '') + '</span></td>' +
         '<td class="r">' + it.qty + '</td><td class="r">' + BCT.fmtVND(it.sellPrice) + '</td><td class="r">' + BCT.fmtVND(lineRev) + '</td><td class="r">' + BCT.fmtVND(lineCost) + '</td>' +
         '<td class="r ' + (lineRev - lineCost >= 0 ? 'pos' : 'neg') + '">' + BCT.fmtVND(lineRev - lineCost) + '</td></tr>';
     });
@@ -820,6 +933,14 @@
         if ($('s-groupyear')) $('s-groupyear').addEventListener('change', function (e) { setFilter.groupYear = e.target.checked; render(); });
       } else {
         if ($('sd-missing')) $('sd-missing').addEventListener('change', function (e) { setDetailFilter.missingOnly = e.target.checked; render(); });
+        var seg = $('sd-mode');
+        if (seg) Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) {
+          b.addEventListener('click', function () { setDetailFilter.mode = b.getAttribute('data-mode'); render(); });
+        });
+        var dkey = decodeURIComponent(r.segs.slice(1).join('/'));
+        Array.prototype.forEach.call(document.querySelectorAll('.num-cell[data-num]'), function (el) {
+          el.addEventListener('click', function () { openSlotPanel(dkey, Number(el.getAttribute('data-num'))); });
+        });
       }
     }
 
@@ -878,6 +999,7 @@
           S.lots.push({
             id: BCT.uid('lot'), cardId: cardId, qty: qty, qtyRemaining: qty,
             costPerUnit: cost, importDate: date, source: source,
+            variant: $('n-variant').value || 'Normal',
             condition: 'NM', createdAt: new Date().toISOString()
           });
           persist();

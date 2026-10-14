@@ -59,6 +59,7 @@
         cardId: card.id,
         qty: l.qty, qtyRemaining: l.qty,
         costPerUnit: l.cost, importDate: l.date, source: l.source || '',
+        variant: l.variant || 'Normal',
         condition: def.condition || 'NM',
         createdAt: new Date().toISOString()
       });
@@ -85,41 +86,41 @@
 
     addCard(state, { name: 'Charizard ex', set: '151', setId: 'sv03.5', number: '006', rarity: 'Special Illustration Rare', hue: 18, condition: 'NM',
       lots: [
-        { qty: 5, cost: 900000, date: d(55), source: 'Nhóm Zalo TCG' },
-        { qty: 3, cost: 1150000, date: d(19), source: 'Shop HN' }
+        { qty: 5, cost: 900000, date: d(55), source: 'Nhóm Zalo TCG', variant: 'Holo' },
+        { qty: 3, cost: 1150000, date: d(19), source: 'Shop HN', variant: 'Normal' }
       ]});
     addCard(state, { name: 'Pikachu VMAX', set: 'Vivid Voltage', setId: 'swsh4', number: '044', rarity: 'Hyper Rare', hue: 48, condition: 'NM',
       lots: [
-        { qty: 10, cost: 120000, date: d(70), source: 'Chợ TCG' },
-        { qty: 4, cost: 95000, date: d(14), source: 'Facebook' }
+        { qty: 10, cost: 120000, date: d(70), source: 'Chợ TCG', variant: 'Reverse Holo' },
+        { qty: 4, cost: 95000, date: d(14), source: 'Facebook', variant: 'Holo' }
       ]});
     addCard(state, { name: 'Umbreon VMAX', set: 'Evolving Skies', setId: 'swsh7', number: '215', rarity: 'Special Illustration Rare', hue: 260, condition: 'NM',
       graded: { org: 'PSA', score: 10 },
       lots: [
-        { qty: 2, cost: 2800000, date: d(77), source: 'Đấu giá eBay' },
-        { qty: 1, cost: 3100000, date: d(32), source: 'Collector SG' }
+        { qty: 2, cost: 2800000, date: d(77), source: 'Đấu giá eBay', variant: 'Holo' },
+        { qty: 1, cost: 3100000, date: d(32), source: 'Collector SG', variant: 'Holo' }
       ]});
     addCard(state, { name: 'Gengar ex', set: '151', setId: 'sv03.5', number: '094', rarity: 'Double Rare', hue: 280, condition: 'NM',
       lots: [
-        { qty: 8, cost: 45000, date: d(42), source: 'Shop HN' },
-        { qty: 6, cost: 38000, date: d(9), source: 'Chợ TCG' }
+        { qty: 8, cost: 45000, date: d(42), source: 'Shop HN', variant: 'Reverse Holo' },
+        { qty: 6, cost: 38000, date: d(9), source: 'Chợ TCG', variant: 'Normal' }
       ]});
     addCard(state, { name: 'Mew ex', set: '151', setId: 'sv03.5', number: '151', rarity: 'Special Illustration Rare', hue: 300, condition: 'LP',
-      lots: [{ qty: 3, cost: 650000, date: d(60), source: 'Nhóm Zalo TCG' }] });
+      lots: [{ qty: 3, cost: 650000, date: d(60), source: 'Nhóm Zalo TCG', variant: 'Holo' }] });
     addCard(state, { name: 'Rayquaza VMAX', set: 'Evolving Skies', setId: 'swsh7', number: '111', rarity: 'Ultra Rare', hue: 140, condition: 'NM',
       lots: [
-        { qty: 6, cost: 150000, date: d(85), source: 'Chợ TCG' },
-        { qty: 4, cost: 180000, date: d(47), source: 'Facebook' }
+        { qty: 6, cost: 150000, date: d(85), source: 'Chợ TCG', variant: 'Normal' },
+        { qty: 4, cost: 180000, date: d(47), source: 'Facebook', variant: 'Reverse Holo' }
       ]});
     // Ví dụ điển hình: cùng 1 card, nhập 10k rồi 20k
     addCard(state, { name: 'Eevee', set: 'SWSH Promo', setId: 'swshp', number: 'SWSH230', rarity: 'Promo', hue: 32, condition: 'NM',
       note: 'Promo Eevee — nhập 2 đợt giá khác nhau',
       lots: [
-        { qty: 20, cost: 10000, date: d(26), source: 'Chợ TCG' },
-        { qty: 15, cost: 20000, date: d(6), source: 'Shop HN' }
+        { qty: 20, cost: 10000, date: d(26), source: 'Chợ TCG', variant: 'Normal' },
+        { qty: 15, cost: 20000, date: d(6), source: 'Shop HN', variant: 'Reverse Holo' }
       ]});
     addCard(state, { name: 'Lugia V', set: 'Silver Tempest', setId: 'swsh12', number: '138', rarity: 'Ultra Rare', hue: 200, condition: 'NM',
-      lots: [{ qty: 4, cost: 220000, date: d(65), source: 'Đấu giá eBay' }] });
+      lots: [{ qty: 4, cost: 220000, date: d(65), source: 'Đấu giá eBay', variant: 'Holo' }] });
 
     // ~10 đơn trong 8 tuần qua, đủ 4 kênh
     sell(state, { date: d(53), channel: 'shopee', buyer: 'Minh', fees: 25000, shippingFee: 22000, lines: [

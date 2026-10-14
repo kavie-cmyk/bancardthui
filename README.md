@@ -31,6 +31,14 @@ Nút **"Xóa dữ liệu mẫu"** trên thanh header để bắt đầu kho tr�
 - Filter theo năm phát hành + chế độ **nhóm theo năm** (mới → cũ).
 - Nút **?** ở đầu trang Kho giải thích ký hiệu độ hiếm (● ◆ ★ …) bằng tiếng Việt.
 
+### Phiên bản in & checklist 2 chế độ
+
+- Mỗi lô nhập có **phiên bản**: Normal / Reverse Holo / Holo / 1st Edition (chọn lúc nhập kho; dữ liệu cũ mặc định Normal).
+- Tiến độ set tính theo chuẩn **complete set**: 1 số thứ tự chỉ tính 1 lần dù có nhiều bản trùng (badge ×N hiện tổng số bản).
+- Checklist có toggle **Set chuẩn / Master**: Master hiện breakdown phiên bản từng ô (vd "Reverse Holo ×2 · Holo ×1") mà không đổi cách tính tiến độ.
+- Bấm vào ô đã có → panel: xem card đang chiếm ô + variant, nút **Sửa lá**, form **Đổi số/set** (đổi số thứ tự, set, độ hiếm — lô & đơn giữ nguyên), **Gỡ khỏi set**.
+- Ô trống có nút **+ thêm** → mở Nhập kho đã điền sẵn set + số thứ tự.
+
 ## FIFO — logic cốt lõi
 
 - Mỗi lần nhập = **1 lô riêng** (giá cost + ngày nhập của lô đó).
