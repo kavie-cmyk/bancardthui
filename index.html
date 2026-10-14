@@ -21,12 +21,18 @@
     <nav class="nav" id="nav"></nav>
     <span class="seed-pill" id="seed-pill" hidden>Dữ liệu mẫu</span>
     <button class="btn-ghost" id="btn-seed-toggle" hidden></button>
+    <button class="btn-ghost" id="btn-export" title="Tải backup JSON toàn bộ dữ liệu">Xuất JSON</button>
+    <button class="btn-ghost" id="btn-logout" title="Đăng xuất">Đăng xuất</button>
   </div>
 </header>
 
 <main class="wrap" id="app"></main>
 <div class="toast" id="toast"></div>
+<div class="loading" id="loading" hidden><div class="spinner"></div><div>Đang tải…</div></div>
 
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
 <script src="js/sets-db.js"></script>
 <script src="js/store.js"></script>
 <script src="js/seed.js"></script>

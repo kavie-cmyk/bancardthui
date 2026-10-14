@@ -9,9 +9,20 @@ create table if not exists cards (
   set_id text,               -- tcgdex set id, vd 'sv03.5' (để tra tổng số lá/năm phát hành)
   number text,               -- số thứ tự trong set, vd '025'
   rarity text,
-  condition text not null default 'NM' check (condition in ('NM','LP','MP')),
+  condition text not null default 'A' check (condition in ('New Mint','A','B','C','D')),
   graded_org text,            -- 'PSA' | 'BGS' | null
   graded_score text,
+  cert_number text default '',  -- mã cert PSA/BGS
+  cert_pop integer,             -- pop report: số lá cùng điểm
+  language text not null default 'en' check (language in ('en','jp','other')),
+  storage_location text default '',  -- vị trí cất: "Hộp A3", "Binder 2 - trang 15"
+  misprint boolean not null default false,  -- flag lỗi in
+  market_price numeric,           -- giá tham khảo chốt (đã quy đổi theo condition)
+  market_currency text default 'EUR',
+  market_source text default '',
+  market_updated_at timestamptz,
+  price_sources jsonb default '[]',
+  -- price_sources: [{source:'cardmarket'|'tcgplayer'|'ebay'|'other', price, currency, kind, updated_at}]
   note text default '',
   created_at timestamptz not null default now()
 );
@@ -47,7 +58,9 @@ create table if not exists inventory_lots (
   cost_per_unit integer not null check (cost_per_unit >= 0),  -- VND
   import_date date not null,
   source text default '',
-  condition text not null default 'NM',
+  condition text not null default 'A',
+  variant text not null default 'Normal' check (variant in ('Normal','Reverse Holo','Holo','1st Edition')),
+  holo_pattern text,  -- mẫu màng holo: Cosmos | Cosmos Swirl | Poké Ball | Master Ball | Mirror | Cracked Ice | Confetti | Khác
   created_at timestamptz not null default now()
 );
 create index if not exists idx_lots_card_fifo on inventory_lots (card_id, import_date, created_at);

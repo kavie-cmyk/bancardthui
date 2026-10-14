@@ -21,19 +21,112 @@
     edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3l4 4L8 20l-5 1 1-5L17 3z"/></svg>'
   };
 
-  /* ---------- state ---------- */
-  var S;
-  function boot() {
-    var raw = null;
-    try { raw = localStorage.getItem(BCT.STORAGE_KEY); } catch (e) {}
-    if (raw === null) {
-      S = window.BCT_SEED.buildSeed();
-      BCT.save(S);
-    } else {
-      S = BCT.load();
+  /* ---------- auth: magic link ---------- */
+  function chromeVisible(on) {
+    ['nav', 'seed-pill', 'btn-seed-toggle', 'btn-export', 'btn-logout'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.hidden = !on;
+    });
+  }
+
+  function renderLogin(sent) {
+    chromeVisible(false);
+    document.getElementById('brand-icon').innerHTML = IC.card;
+    var app = document.getElementById('app');
+    app.innerHTML =
+      '<div class="login-wrap">' +
+      '  <div class="panel login-panel">' +
+      '    <div class="login-mark">' + IC.card + '</div>' +
+      '    <h2 class="login-title">Bán Card <em>Thui</em></h2>' +
+      '    <p class="login-sub">Kho card của Bự — đăng nhập để mở két.</p>' +
+      (sent
+        ? '<div class="login-sent">' +
+          '<div class="login-sent-title">Đã gửi link đăng nhập!</div>' +
+          '<p class="panel-note">Kiểm tra email (cả mục spam), bấm vào link để vào app.</p>' +
+          '<p class="panel-note">Link hết hạn sau 1 giờ.</p></div>'
+        : '<form id="login-form">' +
+          '  <div class="field">' +
+          '    <label for="login-email">Email</label>' +
+          '    <input type="email" id="login-email" placeholder="email của Bự" autocomplete="email" required>' +
+          '  </div>' +
+          '  <div class="form-err" id="login-err" hidden></div>' +
+          '  <div class="form-actions"><button type="submit" class="btn" id="login-btn">Gửi link đăng nhập</button></div>' +
+          '  <p class="panel-note">Không cần mật khẩu — link đăng nhập gửi qua email, bấm vào là vào.</p>' +
+          '</form>') +
+      '  </div>' +
+      '</div>';
+    if (!sent) {
+      var form = document.getElementById('login-form');
+      var err = document.getElementById('login-err');
+      var btn = document.getElementById('login-btn');
+      form.onsubmit = function (ev) {
+        ev.preventDefault();
+        err.hidden = true;
+        var email = document.getElementById('login-email').value.trim();
+        btn.disabled = true; btn.textContent = 'Đang gửi…';
+        window.BCTAuth.requestMagicLink(email).then(function () {
+          renderLogin(true);
+        }).catch(function (e) {
+          err.textContent = e.message; err.hidden = false;
+          btn.disabled = false; btn.textContent = 'Gửi link đăng nhập';
+        });
+      };
+      document.getElementById('login-email').focus();
     }
   }
-  function persist() { BCT.save(S); }
+
+  function logout() {
+    window.BCTAuth.clearSession();
+    S = null;
+    location.hash = '#/dashboard';
+    render();
+  }
+
+  /* ---------- state ---------- */
+  var S;
+  async function boot() {
+    window.BCTAuth.parseSessionFromHash();
+    if (!window.BCTAuth.isLoggedIn()) {
+      renderLogin(false);
+      return;
+    }
+    showLoading(true);
+    try {
+      S = await BCT.load();
+      if (S._justSeeded) setSeededUI(true);
+    } catch (e) {
+      showLoading(false);
+      chromeVisible(true);
+      renderNav('#/dashboard');
+      document.getElementById('app').innerHTML =
+        '<div class="empty"><h3>Không kết nối được Supabase</h3><p>' + BCT.esc(e.message) + '</p>' +
+        '<p class="panel-note">Kiểm tra mạng rồi tải lại trang.</p></div>';
+      return;
+    }
+    showLoading(false);
+    render();
+    bindGlobalButtons();
+  }
+
+  function bindGlobalButtons() {
+    var exp = document.getElementById('btn-export');
+    if (exp && !exp.dataset.bound) {
+      exp.dataset.bound = '1';
+      exp.onclick = function () {
+        withLoading(async function () {
+          var data = await BCT.exportJSON();
+          var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'bancardthui-backup-' + BCT.todayISO() + '.json';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+          toast('Đã xuất backup JSON.');
+        }).catch(function (err) { toast(err.message); });
+      };
+    }
+  }
 
   var toastTimer = null;
   function toast(msg) {
@@ -42,6 +135,46 @@
     t.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+  }
+
+  /* ---------- loading overlay ---------- */
+  function showLoading(on) {
+    var el = document.getElementById('loading');
+    if (el) el.hidden = !on;
+  }
+  async function withLoading(fn) {
+    showLoading(true);
+    try { return await fn(); }
+    finally { showLoading(false); }
+  }
+
+  /* ---------- cờ dữ liệu mẫu (chỉ UI, lưu local) ---------- */
+  var SEED_FLAG = 'bct_seed_ui';
+  function isSeededUI() {
+    try { return localStorage.getItem(SEED_FLAG) === '1'; } catch (e) { return false; }
+  }
+  function setSeededUI(v) {
+    try { if (v) localStorage.setItem(SEED_FLAG, '1'); else localStorage.removeItem(SEED_FLAG); } catch (e) {}
+  }
+
+  /* ---------- ảnh: fallback chain TCGdex CDN → placeholder ---------- */
+  window.__imgFb = function (el) {
+    var fb = el.getAttribute('data-fb');
+    if (fb) { el.removeAttribute('data-fb'); el.src = fb; }
+    else { el.onerror = null; el.src = BCT.placeholderImage(); }
+  };
+  // Thẻ <img> cho card: ảnh upload → TCGdex CDN (low/high) → onerror thử URL dự phòng → placeholder
+  function cardImgTag(card, quality, cls, alt) {
+    var up = (card.images && card.images.length) ? card.images[0] : null;
+    var url = up || BCT.cardImageURL(card, quality);
+    if (!url) return '';
+    var fbAttr = '';
+    if (!up) {
+      var fb = BCT.cardImageFallbackURL(card, quality);
+      if (fb) fbAttr = ' data-fb="' + fb + '"';
+    }
+    return '<img' + (cls ? ' class="' + cls + '"' : '') + ' src="' + url + '"' + fbAttr +
+      ' alt="' + BCT.esc(alt || card.name) + '" loading="lazy" onerror="__imgFb(this)">';
   }
 
   function parseVND(str) {
@@ -64,6 +197,19 @@
   ];
 
   function renderNav(active) {
+    document.getElementById('nav').hidden = false;
+    var exp0 = document.getElementById('btn-export'); if (exp0) exp0.hidden = false;
+    var lob = document.getElementById('btn-logout');
+    if (lob) {
+      lob.hidden = false;
+      if (!lob.dataset.bound) {
+        lob.dataset.bound = '1';
+        lob.onclick = function () {
+          if (!confirm('Đăng xuất khỏi app?')) return;
+          logout();
+        };
+      }
+    }
     document.getElementById('nav').innerHTML = NAV.map(function (n) {
       var on = active === n.path || (n.path !== '#/dashboard' && active.indexOf(n.path) === 0 && active !== '#/dashboard');
       return '<a href="' + n.path + '" class="' + (on ? 'active' : '') + '">' + n.icon + n.label + '</a>';
@@ -71,17 +217,27 @@
     document.getElementById('brand-icon').innerHTML = IC.card;
     var pill = document.getElementById('seed-pill');
     var btn = document.getElementById('btn-seed-toggle');
-    if (S.isSeeded) {
+    if (isSeededUI()) {
       pill.hidden = false; btn.hidden = false; btn.textContent = 'Xóa dữ liệu mẫu';
       btn.onclick = function () {
         if (!confirm('Xóa toàn bộ dữ liệu mẫu và bắt đầu kho trống?')) return;
-        S = BCT.blankState(); persist(); toast('Đã xóa dữ liệu mẫu.'); location.hash = '#/dashboard'; render();
+        withLoading(async function () {
+          S = await BCT.wipeAll();
+          setSeededUI(false);
+          toast('Đã xóa dữ liệu mẫu.');
+          location.hash = '#/dashboard'; render();
+        }).catch(function (err) { toast(err.message); });
       };
     } else {
       pill.hidden = true; btn.hidden = false; btn.textContent = 'Nạp dữ liệu mẫu';
       btn.onclick = function () {
-        if (!confirm('Nạp bộ dữ liệu mẫu (8 card, 10 đơn)? Dữ liệu hiện tại sẽ bị thay thế.')) return;
-        S = window.BCT_SEED.buildSeed(); persist(); toast('Đã nạp dữ liệu mẫu.'); location.hash = '#/dashboard'; render();
+        if (!confirm('Nạp bộ dữ liệu mẫu (9 card, 10 đơn)? Dữ liệu hiện tại sẽ bị thay thế.')) return;
+        withLoading(async function () {
+          S = await BCT.reseed();
+          setSeededUI(true);
+          toast('Đã nạp dữ liệu mẫu.');
+          location.hash = '#/dashboard'; render();
+        }).catch(function (err) { toast(err.message); });
       };
     }
   }
@@ -99,6 +255,7 @@
   }
 
   function render() {
+    if (!window.BCTAuth.isLoggedIn()) { renderLogin(false); return; }
     var r = route();
     var base = r.segs[0] || 'dashboard';
     closeSlotPanel();
@@ -199,9 +356,8 @@
     if (!top.length) return '<div class="empty" style="padding:24px">Chưa có đơn bán nào.</div>';
     return top.map(function (x, i) {
       var c = x.card;
-      var img = c.images[0] || '';
       return '<div class="rowline"><span class="rank">' + (i + 1) + '</span>' +
-        (img ? '<img class="thumb" src="' + img + '" alt="">' : '') +
+        cardImgTag(c, 'low', 'thumb') +
         '<div class="grow"><div class="t"><a class="rowlink" href="#/kho/' + c.id + '" style="color:var(--ink);text-decoration:none">' + BCT.esc(c.name) + '</a></div>' +
         '<div class="s">' + BCT.esc(c.set) + '</div></div>' +
         '<div style="text-align:right"><div class="mono" style="font-weight:600">' + x.qty + ' thẻ</div>' +
@@ -246,13 +402,24 @@
   }
 
   /* ================= VIEW: KHO ================= */
-  var khoFilter = { q: '', set: '', rarity: '', sort: 'name' };
+  var khoFilter = { q: '', set: '', rarity: '', sort: 'name', lang: 'all', holo: '', loc: '', misprintOnly: false, gradedOnly: false };
+
+  function langChip(label, val) {
+    return '<button type="button" class="chip' + (khoFilter.lang === val ? ' on' : '') + '" data-lang="' + val + '">' + label + '</button>';
+  }
+
+  function toggleChip(label, on, attr) {
+    return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-toggle="' + attr + '">' + label + '</button>';
+  }
 
   function vKho() {
-    var sets = [], rarities = [];
+    var sets = [], rarities = [], holos = [];
     S.cards.forEach(function (c) {
       if (c.set && sets.indexOf(c.set) < 0) sets.push(c.set);
       if (c.rarity && rarities.indexOf(c.rarity) < 0) rarities.push(c.rarity);
+    });
+    S.lots.forEach(function (l) {
+      if (l.qtyRemaining > 0 && l.holoPattern && holos.indexOf(l.holoPattern) < 0) holos.push(l.holoPattern);
     });
     sets.sort(); rarities.sort();
 
@@ -268,8 +435,14 @@
       '<option value="stock"' + (khoFilter.sort === 'stock' ? ' selected' : '') + '>Tồn kho ↓</option>' +
       '<option value="capital"' + (khoFilter.sort === 'capital' ? ' selected' : '') + '>Vốn đang ôm ↓</option>' +
       '</select>';
+    html += '<select id="f-holo"><option value="">Mọi mẫu holo</option>' + holos.map(function (h) { return '<option value="' + BCT.esc(h) + '"' + (khoFilter.holo === h ? ' selected' : '') + '>' + BCT.esc(h) + '</option>'; }).join('') + '</select>';
+    html += '<input type="search" id="f-loc" placeholder="Vị trí lưu trữ…" value="' + BCT.esc(khoFilter.loc) + '" style="max-width:170px">';
     html += '<a class="btn secondary" href="#/nhap" style="text-decoration:none">' + IC.plus + ' Nhập kho</a>';
     html += '</div>';
+    html += '<div class="chip-row" id="lang-chips">' +
+      langChip('Tất cả', 'all') + langChip('EN', 'en') + langChip('JP', 'jp') + langChip('Khác', 'other') +
+      toggleChip('Chỉ lá lỗi in', khoFilter.misprintOnly, 'misprint') +
+      toggleChip('Đã graded', khoFilter.gradedOnly, 'graded') + '</div>';
     html += '<div class="card-grid" id="card-grid">' + khoCards() + '</div>';
     if (!S.cards.length) html = '<h1 class="page-title">Kho card</h1><div class="empty"><h3>Kho đang trống</h3><p>Bấm "Nhập kho" để thêm card đầu tiên.</p><a class="btn" href="#/nhap" style="text-decoration:none;margin-top:12px">' + IC.plus + ' Nhập kho</a></div>';
     return html;
@@ -280,7 +453,17 @@
     var list = S.cards.filter(function (c) {
       if (khoFilter.set && c.set !== khoFilter.set) return false;
       if (khoFilter.rarity && c.rarity !== khoFilter.rarity) return false;
-      if (q && (c.name + ' ' + c.set + ' ' + c.number).toLowerCase().indexOf(q) < 0) return false;
+      if (khoFilter.lang !== 'all' && (c.language || 'en') !== khoFilter.lang) return false;
+      if (khoFilter.holo) {
+        var has = S.lots.some(function (l) {
+          return l.cardId === c.id && l.qtyRemaining > 0 && l.holoPattern === khoFilter.holo;
+        });
+        if (!has) return false;
+      }
+      if (khoFilter.misprintOnly && !c.misprint) return false;
+      if (khoFilter.gradedOnly && !c.graded) return false;
+      if (khoFilter.loc && (c.storageLocation || '').toLowerCase().indexOf(khoFilter.loc.toLowerCase()) < 0) return false;
+      if (q && (c.name + ' ' + c.set + ' ' + c.number + ' ' + (c.storageLocation || '')).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     list.sort(function (a, b) {
@@ -292,15 +475,84 @@
     return list.map(function (c) {
       var st = BCT.stockOf(S, c.id);
       var avg = BCT.avgCostOf(S, c.id);
-      var img = c.images[0] || '';
+      var langTag = (c.language || 'en') !== 'en' ? '<span class="tag" style="font-size:10px">' + BCT.esc(BCT.LANGUAGES[c.language] || c.language) + '</span>' : '';
+      var misTag = c.misprint ? '<span class="misprint-badge">MISPRINT</span>' : '';
+      var mktLine = '';
+      var rg = BCT.marketRangeVND(c);
+      if (rg && rg.count > 0) {
+        var tip = (c.priceSources || []).map(function (s) {
+          return BCT.sourceLabel(s.source) + ': ' + BCT.fmtPrice(s.price, s.currency);
+        }).join(' · ');
+        var txt = rg.min === rg.max ? BCT.fmtVNDShort(rg.max)
+          : BCT.fmtVNDShort(rg.min) + '–' + BCT.fmtVNDShort(rg.max);
+        mktLine = '<div class="pcard-meta mkt-range" title="' + BCT.esc(tip) + '">Giá TK ≈ ' + txt + '</div>';
+      }
       return '<a class="pcard" href="#/kho/' + c.id + '">' +
-        '<div class="pcard-img">' + (img ? '<img src="' + img + '" alt="' + BCT.esc(c.name) + '" loading="lazy">' : '') +
+        '<div class="pcard-img">' + cardImgTag(c, 'low', '', c.name) +
         '<span class="qty-badge' + (st === 0 ? ' out' : '') + '">' + st + ' thẻ</span></div>' +
-        '<div class="pcard-body"><h3 class="pcard-name">' + BCT.esc(c.name) + '</h3>' +
-        '<div class="pcard-meta">' + BCT.esc(c.set || '—') + (c.number ? ' · ' + BCT.esc(c.number) : '') + '</div>' +
+        '<div class="pcard-body"><h3 class="pcard-name">' + BCT.esc(c.name) + ' ' + langTag + misTag + '</h3>' +
+        '<div class="pcard-meta">' + BCT.esc(c.set || '—') + (c.number ? ' · ' + BCT.esc(c.number) : '') + (c.storageLocation ? ' · 📦 ' + BCT.esc(c.storageLocation) : '') + '</div>' +
+        mktLine +
         '<div class="pcard-stats"><span>Vốn TB <b>' + BCT.fmtVND(avg) + '</b></span><span>Ôm <b>' + BCT.fmtVND(st * avg) + '</b></span></div>' +
         '</div></a>';
     }).join('');
+  }
+
+  /* ---------- giá tham khảo (đa nguồn pluggable + nhập tay) ---------- */
+  // Dropdown nguồn nhập tay lấy từ config → thêm nguồn mới tự hiện ở đây.
+  var MANUAL_SOURCES = BCT.priceSourceDefs().map(function (d) { return [d.key, d.label]; });
+
+  // Ghi chú nguồn auto cho nút "Kéo giá các nguồn", vd "Tự động: Cardmarket, TCGplayer · eBay (sắp có)".
+  function priceFetchHint() {
+    var defs = BCT.priceSourceDefs();
+    var auto = [], soon = [], i;
+    for (i = 0; i < defs.length; i++) {
+      if (!defs[i].auto) continue;
+      if (defs[i].comingSoon) soon.push(defs[i].label + ' (sắp có' + (defs[i].note ? ' — ' + defs[i].note : '') + ')');
+      else auto.push(defs[i].label);
+    }
+    return 'Tự động: ' + (auto.join(', ') || '—') + (soon.length ? ' · ' + soon.join(', ') : '');
+  }
+
+  function marketSectionHTML(c) {
+    var rows = BCT.marketSourceRows(c);
+    var range = BCT.marketRangeVND(c);
+    var condName = BCT.condLabel(c.condition);
+    var head;
+    if (range && range.count > 0) {
+      head = '<div class="mkt-price">' +
+        (range.min === range.max ? BCT.fmtVND(range.max)
+          : BCT.fmtVND(range.min) + ' – ' + BCT.fmtVND(range.max)) +
+        '</div><div class="hint">' + range.count + ' nguồn · đã × hệ số Cond ' + BCT.esc(condName) + ' (ước tính)</div>';
+    } else if (range) {
+      head = '<div class="mkt-price">' + BCT.fmtVND(range.max) + '</div><div class="hint">Giá đã lưu (chưa tách theo nguồn).</div>';
+    } else {
+      head = '<p class="panel-note">Chưa có giá tham khảo.</p>';
+    }
+    var list = '';
+    if (rows) {
+      list = '<div class="mkt-break">' + rows.map(function (r) {
+        var upd = r.updated_at ? BCT.fmtDate(String(r.updated_at).slice(0, 10)) : '—';
+        var kind = r.kind === 'manual' ? 'nhập tay' : BCT.esc(r.kind || '');
+        return '<div class="mkt-src"><b>' + BCT.esc(r.label) + '</b> ' + BCT.fmtPrice(r.price, r.currency) +
+          (kind ? ' <span class="hint">(' + kind + ')</span>' : '') +
+          '<div class="hint">= ' + BCT.fmtVND(r.vnd) + ' → <b>Cond ' + BCT.esc(condName) + ': ' + BCT.fmtVND(r.vndCond) + '</b> · cập nhật ' + upd + '</div></div>';
+      }).join('') + '</div>';
+    }
+    return '<section class="panel" style="margin-bottom:14px"><div class="panel-head"><h2 class="panel-title">Giá tham khảo</h2></div>' +
+      head + list +
+      '<div class="form-grid" style="margin-top:10px">' +
+      '<div class="field"><label>Kéo tự động (miễn phí)</label>' +
+      '<button id="mkt-fetch" class="btn secondary" type="button">Kéo giá các nguồn</button>' +
+      '<div class="hint">' + BCT.esc(priceFetchHint()) + '<br>Theo setId + số lá: <span class="mono">' + BCT.esc(c.setId || '—') + '</span> / <span class="mono">' + BCT.esc(c.number || '—') + '</span></div></div>' +
+      '<div class="field"><label>Nhập tay (ghi đè nguồn đó)</label>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+      '<select id="mkt-src" style="max-width:130px">' + MANUAL_SOURCES.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<input id="mkt-price" inputmode="decimal" placeholder="Giá" style="flex:1;min-width:90px">' +
+      '<select id="mkt-cur" style="max-width:80px"><option value="EUR">EUR</option><option value="USD">USD</option><option value="JPY">JPY</option></select>' +
+      '<button id="mkt-save" class="btn secondary" type="button">Lưu</button></div>' +
+      '<div class="hint">VD: nhập tay giá eBay JP bằng JPY rồi Lưu.</div></div>' +
+      '</div><div id="mkt-msg" class="hint" style="margin-top:6px"></div></section>';
   }
 
   function vCardDetail(id) {
@@ -314,19 +566,25 @@
     var hist = BCT.priceHistory(S, id);
     var orders = BCT.ordersOfCard(S, id);
     var lastSell = hist.length ? hist[hist.length - 1].sellPrice : 0;
-    var img = c.images[0] || '';
 
     var html = '<a class="backlink" href="#/kho">' + IC.back + ' Kho card</a>';
     html += '<div class="detail-head">';
-    if (img) html += '<img class="detail-img" src="' + img + '" alt="' + BCT.esc(c.name) + '">';
+    html += cardImgTag(c, 'high', 'detail-img', c.name);
     html += '<div class="detail-info"><h1>' + BCT.esc(c.name) + '</h1>';
     var setInfo = BCT.resolveSet(S, c);
     var numLabel = c.number ? 'Lá số <b class="mono">' + BCT.esc(c.number) + (setInfo.total ? '/' + setInfo.total : '') + '</b>' : '';
     html += '<div class="meta">' + BCT.esc(setInfo.name || c.set || '') + (numLabel ? ' · ' + numLabel : '') + '</div>';
     if (BCT.isSecretCard(c, setInfo)) html += '<div style="margin-bottom:8px"><span class="secret-tag">SECRET RARE — số vượt tổng set</span></div>';
     html += '<div>' + (c.rarity ? '<span class="tag">' + BCT.esc(c.rarity) + '</span>' : '') +
-      '<span class="tag">' + (BCT.CONDITIONS[c.condition] || c.condition) + '</span>' +
-      (c.graded ? '<span class="tag">' + c.graded.org + ' ' + c.graded.score + '</span>' : '') + '</div>';
+      '<span class="tag">' + BCT.esc(BCT.condLabel(c.condition)) + '</span>' +
+      '<span class="tag">' + BCT.esc(BCT.LANGUAGES[c.language] || 'English') + '</span>' +
+      (c.graded ? '<span class="tag">' + c.graded.org + ' ' + c.graded.score + '</span>' : '') +
+      (c.misprint ? '<span class="misprint-badge">MISPRINT</span>' : '') + '</div>';
+    if (c.storageLocation) html += '<div class="meta" style="margin-top:6px">📦 Vị trí lưu trữ: <b>' + BCT.esc(c.storageLocation) + '</b></div>';
+    if (c.graded && (c.certNumber || c.certPop != null)) {
+      html += '<div class="meta" style="margin-top:6px">Cert: <b class="mono">' + BCT.esc(c.certNumber || '—') + '</b>' +
+        (c.certPop != null ? ' · Pop: <b>' + c.certPop + '</b>' : '') + '</div>';
+    }
     html += '<div class="stat-row">' +
       stat('Tồn kho', st + ' thẻ') + stat('Vốn TB', BCT.fmtVND(avg)) +
       stat('Tổng vốn ôm', BCT.fmtVND(st * avg)) + stat('Giá bán gần nhất', lastSell ? BCT.fmtVND(lastSell) : '—') + '</div>';
@@ -338,16 +596,18 @@
       '</div>';
     if (c.note) html += '<p style="color:var(--muted);font-size:13px;margin-top:10px">' + BCT.esc(c.note) + '</p>';
     html += '</div></div>';
+    html += marketSectionHTML(c);
 
     html += '<div class="grid-2">';
     html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Các lô nhập (' + allLots.length + ')</h2><span class="panel-note">FIFO: bán trừ lô cũ nhất trước</span></div>';
     if (!allLots.length) html += '<p class="panel-note">Chưa có lô nào.</p>';
     else {
-      html += '<table class="tbl"><thead><tr><th>Ngày nhập</th><th class="r">Còn lại / Gốc</th><th class="r">Giá cost</th><th>Phiên bản</th><th>Nguồn</th></tr></thead><tbody>';
+      html += '<table class="tbl"><thead><tr><th>Ngày nhập</th><th class="r">Còn lại / Gốc</th><th class="r">Giá cost</th><th>Phiên bản</th><th>Mẫu holo</th><th>Nguồn</th></tr></thead><tbody>';
       allLots.forEach(function (l, i) {
         html += '<tr><td>' + BCT.fmtDate(l.importDate) + (i === 0 && l.qtyRemaining > 0 ? ' <span class="tag" style="font-size:9px">FIFO trước</span>' : '') + '</td>' +
           '<td class="r">' + l.qtyRemaining + ' / ' + l.qty + '</td><td class="r">' + BCT.fmtVND(l.costPerUnit) + '</td>' +
           '<td><span class="tag">' + BCT.esc(l.variant || 'Normal') + '</span></td>' +
+          '<td>' + (l.holoPattern ? '<span class="tag" style="border-color:var(--gold-dim)">' + BCT.esc(l.holoPattern) + '</span>' : '<span style="color:var(--muted)">—</span>') + '</td>' +
           '<td>' + BCT.esc(l.source || '—') + '</td></tr>';
       });
       html += '</tbody></table>';
@@ -402,7 +662,11 @@
   }
 
   /* ================= VIEW: BỘ SƯU TẬP (SETS) ================= */
-  var setFilter = { sort: 'progress', year: 'all', groupYear: false };
+  var setFilter = { sort: 'progress', year: 'all', groupYear: false, lang: 'all' };
+
+  function setLangChip(label, val) {
+    return '<button type="button" class="chip' + (setFilter.lang === val ? ' on' : '') + '" data-slang="' + val + '">' + label + '</button>';
+  }
 
   function vSets() {
     var groups = BCT.setGroups(S).filter(function (g) { return g.key !== '__none__' || g.cards.length; });
@@ -415,6 +679,9 @@
         var y = g.info.year;
         return setFilter.year === 'unknown' ? y == null : y === Number(setFilter.year);
       });
+    }
+    if (setFilter.lang !== 'all') {
+      groups = groups.filter(function (g) { return BCT.groupLanguage(S, g) === setFilter.lang; });
     }
     var withP = groups.map(function (g) { return { g: g, p: BCT.setProgress(S, g) }; });
     withP.sort(function (a, b) {
@@ -442,6 +709,8 @@
     html += '<label class="chk"><input type="checkbox" id="s-groupyear"' + (setFilter.groupYear ? ' checked' : '') + '> Nhóm theo năm</label>';
     html += '<a class="btn secondary btn-sm" href="#/sets/manage" style="text-decoration:none;margin-left:auto">' + IC.edit + ' Quản lý set</a>';
     html += '</div>';
+    html += '<div class="chip-row" id="set-lang-chips">' +
+      setLangChip('Tất cả', 'all') + setLangChip('EN', 'en') + setLangChip('JP', 'jp') + setLangChip('Khác', 'other') + '</div>';
 
     if (!withP.length && !unclassified.length) {
       return html + '<div class="empty"><h3>Chưa có set nào</h3><p>Nhập kho và gắn set cho card để theo dõi tiến độ sưu tập.</p></div>';
@@ -481,6 +750,8 @@
     var html = '<a class="set-card" href="' + link + '">';
     html += '<div class="set-name">' + BCT.esc(info.name) + '</div>';
     if (info.custom) html += '<div><span class="tag" style="font-size:10px">Tự tạo</span></div>';
+    var gl = BCT.groupLanguage(S, g);
+    if (gl) html += '<div><span class="tag lang-tag" style="font-size:10px">' + BCT.esc(BCT.LANGUAGES[gl]) + '</span></div>';
     if (info.year != null) html += '<div class="set-year">' + info.year + '</div>';
     if (p.total != null) {
       html += '<div class="progress"><div class="progress-bar" style="width:' + p.pct + '%"></div></div>';
@@ -596,13 +867,17 @@
         var c = BCT.getCard(S, cid);
         var q = BCT.stockOf(S, cid);
         var masterExtra = '';
+        var thumbHTML = '';
         if (mode === 'master') {
           var bd = BCT.variantBreakdown(S, cid);
           masterExtra = '<span class="num-var">' + bd.map(function (b) {
-            return BCT.esc(b.variant) + ' ×' + b.qty;
+            return BCT.esc(b.variant) + (b.holoPattern ? ' · ' + BCT.esc(b.holoPattern) : '') + ' ×' + b.qty;
           }).join(' · ') + '</span>';
+        } else if (c) {
+          thumbHTML = cardImgTag(c, 'low', 'num-thumb', c.name);
         }
-        html += '<button type="button" class="num-cell owned' + (isSecret ? ' secret' : '') + '" data-num="' + n + '" title="' + BCT.esc(c ? c.name : '') + (c && c.rarity ? ' — ' + BCT.esc(c.rarity) : '') + ' — bấm để xem/sửa">' +
+        html += '<button type="button" class="num-cell owned' + (isSecret ? ' secret' : '') + (thumbHTML ? ' has-thumb' : '') + '" data-num="' + n + '" title="' + BCT.esc(c ? c.name : '') + (c && c.rarity ? ' — ' + BCT.esc(c.rarity) : '') + ' — bấm để xem/sửa">' +
+          thumbHTML +
           '<span class="num-stack"><span class="num-n">' + n + '</span>' + masterExtra + '</span><span class="num-qty">×' + q + '</span>' +
           (isSecret ? '<span class="num-secret">SECRET</span>' : '') + '</button>';
       } else {
@@ -641,7 +916,7 @@
       var bd = BCT.variantBreakdown(S, cid);
       html += '<div class="slot-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>' + BCT.esc(c.name) + '</b><span class="mono">' + BCT.stockOf(S, cid) + ' thẻ</span></div>';
       html += '<div style="margin:6px 0">' + (c.rarity ? '<span class="tag">' + BCT.esc(c.rarity) + '</span>' : '') + '</div>';
-      html += '<div>' + bd.map(function (b) { return '<span class="vchip">' + BCT.esc(b.variant) + ' ×' + b.qty + '</span>'; }).join('') + '</div>';
+      html += '<div>' + bd.map(function (b) { return '<span class="vchip">' + BCT.esc(b.variant) + (b.holoPattern ? ' · ' + BCT.esc(b.holoPattern) : '') + ' ×' + b.qty + '</span>'; }).join('') + '</div>';
       html += '<div class="form-actions" style="margin-top:8px"><a class="btn secondary btn-sm" href="#/kho/' + cid + '" style="text-decoration:none">Chi tiết</a>' +
         '<a class="btn secondary btn-sm" href="#/kho/' + cid + '/edit" style="text-decoration:none">' + IC.edit + ' Sửa lá</a></div></div>';
     });
@@ -679,23 +954,29 @@
       return (sel && sel.value) ? sel.value : ids[0];
     };
     document.getElementById('sp-save').addEventListener('click', function () {
-      try {
+      withLoading(async function () {
         var c = BCT.getCard(S, targetId());
         if (!c) throw new Error('Không tìm thấy card.');
         var setName = document.getElementById('sp-set').value.trim();
         var hit = lookupSetByName(setName);
-        c.number = document.getElementById('sp-number').value.trim();
-        c.set = setName;
-        c.setId = hit ? hit.id : null;
         var rar = document.getElementById('sp-rarity').value;
-        if (rar) c.rarity = rar;
-        persist(); closeSlotPanel(); toast('Đã cập nhật lá bài.'); render();
-      } catch (err) { toast(err.message); }
+        await BCT.updateCard(S, targetId(), {
+          number: document.getElementById('sp-number').value.trim(),
+          set: setName, setId: hit ? hit.id : null,
+          rarity: rar || c.rarity
+        });
+        closeSlotPanel(); toast('Đã cập nhật lá bài.'); render();
+      }).catch(function (err) { toast(err.message); });
     });
     document.getElementById('sp-unassign').addEventListener('click', function () {
       if (!confirm('Gỡ lá này khỏi set? Card vẫn nằm trong Kho.')) return;
-      var c = BCT.getCard(S, targetId());
-      if (c) { c.setId = null; c.set = ''; persist(); closeSlotPanel(); toast('Đã gỡ khỏi set.'); render(); }
+      withLoading(async function () {
+        var c = BCT.getCard(S, targetId());
+        if (c) {
+          await BCT.updateCard(S, targetId(), { setId: null, set: '' });
+          closeSlotPanel(); toast('Đã gỡ khỏi set.'); render();
+        }
+      }).catch(function (err) { toast(err.message); });
     });
   }
 
@@ -711,8 +992,14 @@
     html += '<div class="field"><label>Số thứ tự trong set</label><input id="e-number" value="' + BCT.esc(c.number || '') + '" placeholder="VD: 025"></div>';
     html += '<div class="field"><label>Độ hiếm</label><select id="e-rarity"><option value="">— Chọn —</option>' +
       BCT.RARITIES.map(function (r) { return '<option' + (c.rarity === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></div>';
+    html += '<div class="field"><label>Ngôn ngữ</label><select id="e-lang">' +
+      Object.keys(BCT.LANGUAGES).map(function (k) { return '<option value="' + k + '"' + ((c.language || 'en') === k ? ' selected' : '') + '>' + BCT.LANGUAGES[k] + '</option>'; }).join('') + '</select></div>';
     html += '<div class="field"><label>Condition</label><select id="e-cond">' +
-      ['NM', 'LP', 'MP'].map(function (k) { return '<option' + (c.condition === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></div>';
+      BCT.CONDITIONS.map(function (k) { return '<option' + (BCT.condLabel(c.condition) === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></div>';
+    html += '<div class="field"><label>Vị trí lưu trữ</label><input id="e-storage" value="' + BCT.esc(c.storageLocation || '') + '" placeholder="VD: Hộp A3"></div>';
+    html += '<div class="field"><label>Lỗi in</label><label class="chk"><input type="checkbox" id="e-misprint"' + (c.misprint ? ' checked' : '') + '> Misprint (lỗi in)</label></div>';
+    html += '<div class="field"><label>Mã cert (PSA/BGS)</label><input id="e-cert" value="' + BCT.esc(c.certNumber || '') + '" placeholder="VD: 12345678"></div>';
+    html += '<div class="field"><label>Pop (số lá cùng điểm)</label><input id="e-pop" inputmode="numeric" value="' + (c.certPop != null ? c.certPop : '') + '" placeholder="VD: 42"></div>';
     html += '<div class="field"><label>Graded</label><div style="display:flex;gap:8px"><select id="e-graded-org" style="flex:1"><option value="">Không graded</option>' +
       ['PSA', 'BGS'].map(function (o) { return '<option' + (c.graded && c.graded.org === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') +
       '</select><input id="e-graded-score" placeholder="Điểm" style="width:80px" inputmode="decimal" value="' + BCT.esc(c.graded ? c.graded.score : '') + '"></div></div>';
@@ -727,23 +1014,22 @@
     var form = $('f-cset');
     if (form) form.addEventListener('submit', function (e) {
       e.preventDefault();
-      try {
+      withLoading(async function () {
         var input = {
           name: $('cs-name').value, year: $('cs-year').value,
           total: $('cs-total').value, official: $('cs-official').value, note: $('cs-note').value
         };
         var idEl = $('cs-id');
         if (idEl && idEl.value) {
-          BCT.updateCustomSet(S, idEl.value, input);
+          await BCT.updateCustomSet(S, idEl.value, input);
           toast('Đã lưu thay đổi set.');
         } else {
-          var s = BCT.createCustomSet(S, input);
+          var s = await BCT.createCustomSet(S, input);
           toast('Đã thêm set "' + s.name + '".');
         }
-        persist();
         if (location.hash === '#/sets/manage') render();
         else location.hash = '#/sets/manage';
-      } catch (err) { showCsetErr(err.message); }
+      }).catch(function (err) { showCsetErr(err.message); });
     });
 
     Array.prototype.forEach.call(document.querySelectorAll('[data-cset-del]'), function (el) {
@@ -754,7 +1040,10 @@
         var n = BCT.cardsOfCustomSet(S, id).length;
         if (!n) {
           if (!confirm('Xóa set "' + s.name + '"?')) return;
-          BCT.deleteCustomSet(S, id); persist(); toast('Đã xóa set.'); render();
+          withLoading(async function () {
+            await BCT.deleteCustomSet(S, id);
+            toast('Đã xóa set.'); render();
+          }).catch(function (err) { toast(err.message); });
           return;
         }
         // Có card đang gắn → panel xác nhận, bắt buộc chuyển card sang Chưa phân loại
@@ -766,8 +1055,10 @@
         $('cc-no').addEventListener('click', function () { box.innerHTML = ''; });
         $('cc-yes').addEventListener('click', function () {
           if (!$('cc-move').checked) { toast('Phải chuyển card sang Chưa phân loại trước khi xóa.'); return; }
-          var moved = BCT.deleteCustomSet(S, id);
-          persist(); toast('Đã xóa set · ' + moved + ' lá chuyển sang Chưa phân loại.'); render();
+          withLoading(async function () {
+            var moved = await BCT.deleteCustomSet(S, id);
+            toast('Đã xóa set · ' + moved + ' lá chuyển sang Chưa phân loại.'); render();
+          }).catch(function (err) { toast(err.message); });
         });
         box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
@@ -840,10 +1131,17 @@
       '<div class="field"><label>Số thứ tự trong set</label><input id="n-number" placeholder="VD: 025" value="' + BCT.esc(preNum) + '"><div class="hint">Số in góc dưới thẻ, vd 025.</div></div>' +
       '<div class="field"><label>Độ hiếm</label><select id="n-rarity"><option value="">— Chọn —</option>' +
       BCT.RARITIES.map(function (r) { return '<option>' + r + '</option>'; }).join('') + '</select></div>' +
-      '<div class="field"><label>Condition</label><select id="n-cond"><option>NM</option><option>LP</option><option>MP</option></select></div>' +
+      '<div class="field"><label>Ngôn ngữ</label><select id="n-lang">' +
+      Object.keys(BCT.LANGUAGES).map(function (k) { return '<option value="' + k + '">' + BCT.LANGUAGES[k] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>Condition</label><select id="n-cond">' +
+      BCT.CONDITIONS.map(function (k) { return '<option>' + k + '</option>'; }).join('') + '</select><div class="hint">New Mint / A / B / C / D.</div></div>' +
+      '<div class="field"><label>Vị trí lưu trữ</label><input id="n-storage" placeholder="VD: Hộp A3, Binder 2 - trang 15"></div>' +
+      '<div class="field"><label>Lỗi in</label><label class="chk"><input type="checkbox" id="n-misprint"> Misprint (lỗi in)</label></div>' +
+      '<div class="field"><label>Mã cert (PSA/BGS)</label><input id="n-cert" placeholder="VD: 12345678"></div>' +
+      '<div class="field"><label>Pop (số lá cùng điểm)</label><input id="n-pop" inputmode="numeric" placeholder="VD: 42"></div>' +
       '<div class="field"><label>Graded</label><div style="display:flex;gap:8px"><select id="n-graded-org" style="flex:1"><option value="">Không graded</option><option>PSA</option><option>BGS</option></select><input id="n-graded-score" placeholder="Điểm" style="width:80px" inputmode="decimal"></div></div>' +
       '<div class="field full"><label>Ghi chú</label><textarea id="n-note" placeholder="Tình trạng, đặc điểm…"></textarea></div>' +
-      '<div class="field full"><label>Ảnh card</label><div class="img-drop" id="img-drop">Bấm để chọn ảnh (tự nén còn ~800px, JPEG) <input type="file" id="n-images" accept="image/*" multiple></div><div class="img-preview" id="img-preview"></div><div class="hint">Nên chụp mặt trước & mặt sau. Ảnh lưu trong trình duyệt (~5MB giới hạn).</div></div>' +
+      '<div class="field full"><label>Ảnh card</label><div class="img-drop" id="img-drop">Bấm để chọn ảnh (tự nén còn ~800px, JPEG) <input type="file" id="n-images" accept="image/*" multiple></div><div class="img-preview" id="img-preview"></div><div class="hint">Chụp mặt trước & mặt sau lá bài của Bự. Ảnh tải lên Supabase Storage. Bỏ trống = dùng ảnh chính thức từ TCGdex.</div></div>' +
       '</div>';
     html += '<div class="field"><label>Số lượng *</label><input id="n-qty" inputmode="numeric" placeholder="VD: 5"></div>';
     html += '<div class="field"><label>Giá cost / thẻ (VND) *</label><input id="n-cost" inputmode="numeric" placeholder="VD: 10.000"><div class="hint">Giá vốn của đúng lô này.</div></div>';
@@ -852,6 +1150,9 @@
     html += '<div class="field"><label>Phiên bản</label><select id="n-variant">' +
       BCT.VARIANTS.map(function (v) { return '<option>' + v + '</option>'; }).join('') +
       '</select><div class="hint">Bản thường / Reverse Holo / Holo / 1st Edition.</div></div>';
+    html += '<div class="field"><label>Mẫu holo</label><select id="n-holo"><option value="">— Không ghi nhận —</option>' +
+      BCT.HOLO_PATTERNS.map(function (h) { return '<option>' + BCT.esc(h) + '</option>'; }).join('') +
+      '</select><div class="hint">Cosmos, Poké Ball / Master Ball (reverse holo)… — ghi nhận để tra giá & sưu tầm.</div></div>';
     html += '</div>';
     html += '<div class="form-actions"><button class="btn" type="submit">' + IC.check + ' Lưu lô nhập</button><a class="btn secondary" href="#/kho" style="text-decoration:none">Hủy</a></div>';
     html += '</section></form>';
@@ -993,8 +1294,60 @@
       $('f-set').addEventListener('change', function (e) { khoFilter.set = e.target.value; rerender(); });
       $('f-rarity').addEventListener('change', function (e) { khoFilter.rarity = e.target.value; rerender(); });
       $('f-sort').addEventListener('change', function (e) { khoFilter.sort = e.target.value; rerender(); });
+      var fHolo = $('f-holo');
+      if (fHolo) fHolo.addEventListener('change', function (e) { khoFilter.holo = e.target.value; render(); });
+      var fLoc = $('f-loc');
+      if (fLoc) fLoc.addEventListener('input', function (e) { khoFilter.loc = e.target.value; rerender(); });
+      Array.prototype.forEach.call(document.querySelectorAll('#lang-chips .chip'), function (ch) {
+        ch.addEventListener('click', function () {
+          var lg = ch.getAttribute('data-lang');
+          var tg = ch.getAttribute('data-toggle');
+          if (lg != null) { khoFilter.lang = lg; render(); }
+          else if (tg === 'misprint') { khoFilter.misprintOnly = !khoFilter.misprintOnly; render(); }
+          else if (tg === 'graded') { khoFilter.gradedOnly = !khoFilter.gradedOnly; render(); }
+        });
+      });
       var helpBtn = $('rarity-help'), pop = $('rarity-pop');
       if (helpBtn && pop) helpBtn.addEventListener('click', function () { pop.hidden = !pop.hidden; });
+    }
+
+    if (base === 'kho' && r.segs[1] && !r.segs[2] && $('mkt-fetch')) {
+      (function () {
+        var cid = r.segs[1];
+        var msgEl = $('mkt-msg');
+        function mktMsg(t) { if (msgEl) msgEl.textContent = t; }
+        $('mkt-fetch').addEventListener('click', function () {
+          var c = BCT.getCard(S, cid);
+          if (!c) return;
+          if (!c.setId || !c.number) { mktMsg('Card chưa có setId/số — không kéo giá được, vui lòng nhập tay.'); return; }
+          mktMsg('Đang kéo giá các nguồn…');
+          withLoading(async function () {
+            try {
+              var srcs = await BCT.fetchMarketPrices(c.setId, c.number);
+              if (!srcs) { mktMsg('Chưa có giá cho lá này trên TCGdex. Bạn vẫn có thể nhập tay bên dưới.'); return; }
+              await BCT.saveMarketPrices(S, cid, srcs);
+              toast('Đã cập nhật giá ' + srcs.length + ' nguồn: ' + srcs.map(function (s) { return BCT.sourceLabel(s.source); }).join(' + '));
+              render();
+            } catch (err) {
+              mktMsg('Lỗi kéo giá: ' + (err.message || err));
+            }
+          });
+        });
+        $('mkt-save').addEventListener('click', function () {
+          var raw = $('mkt-price').value.trim().replace(',', '.');
+          var val = parseFloat(raw);
+          if (isNaN(val) || val <= 0) { mktMsg('Nhập giá hợp lệ (> 0).'); return; }
+          withLoading(async function () {
+            try {
+              await BCT.addManualPrice(S, cid, {
+                source: $('mkt-src').value, price: val, currency: $('mkt-cur').value || 'EUR'
+              });
+              toast('Đã lưu giá tay (' + BCT.sourceLabel($('mkt-src').value) + ').');
+              render();
+            } catch (err) { mktMsg(err.message || String(err)); }
+          });
+        });
+      })();
     }
 
     if (base === 'kho' && r.segs[2] === 'edit' && $('f-edit')) {
@@ -1003,22 +1356,28 @@
       if (eSet) eSet.addEventListener('input', function (e) { $('e-set-hint').innerHTML = setHintHTML(e.target.value.trim()); });
       $('f-edit').addEventListener('submit', function (e) {
         e.preventDefault();
-        try {
+        withLoading(async function () {
           var c = BCT.getCard(S, cid);
           if (!c) throw new Error('Không tìm thấy card.');
           var nm = $('e-name').value.trim();
           if (!nm) throw new Error('Nhập tên card.');
           var setName = eSet.value.trim();
           var hit = lookupSetByName(setName);
-          c.name = nm; c.set = setName; c.setId = hit ? hit.id : null;
-          c.number = $('e-number').value.trim(); c.rarity = $('e-rarity').value;
-          c.condition = $('e-cond').value;
           var gOrg = $('e-graded-org').value, gScore = $('e-graded-score').value.trim();
-          c.graded = gOrg ? { org: gOrg, score: gScore || '' } : null;
-          c.note = $('e-note').value.trim();
-          persist(); toast('Đã lưu thay đổi.');
+          await BCT.updateCard(S, cid, {
+            name: nm, set: setName, setId: hit ? hit.id : null,
+            number: $('e-number').value.trim(), rarity: $('e-rarity').value,
+            condition: $('e-cond').value, language: $('e-lang').value || 'en',
+            storageLocation: $('e-storage').value.trim(),
+            misprint: $('e-misprint').checked,
+            certNumber: $('e-cert').value.trim(),
+            certPop: $('e-pop').value.trim(),
+            graded: gOrg ? { org: gOrg, score: gScore || '' } : null,
+            note: $('e-note').value.trim()
+          });
+          toast('Đã lưu thay đổi.');
           location.hash = '#/kho/' + cid;
-        } catch (err) { toast(err.message); }
+        }).catch(function (err) { toast(err.message); });
       });
     }
 
@@ -1031,11 +1390,11 @@
             var key = el.getAttribute('data-setkey');
             var wrap = el.parentElement;
             var input = wrap ? wrap.querySelector('input') : null;
-            try {
-              BCT.setManualTotal(S, key, input ? input.value : '');
-              persist(); toast('Đã lưu tổng số lá cho set.');
+            withLoading(async function () {
+              await BCT.setManualTotal(S, key, input ? input.value : '');
+              toast('Đã lưu tổng số lá cho set.');
               render();
-            } catch (err) { toast(err.message); }
+            }).catch(function (err) { toast(err.message); });
           });
         } else if (el.tagName === 'INPUT') {
           // input nằm trong thẻ <a>: chặn navigate khi bấm vào để gõ
@@ -1051,6 +1410,9 @@
         if ($('s-sort')) $('s-sort').addEventListener('change', function (e) { setFilter.sort = e.target.value; render(); });
         if ($('s-year')) $('s-year').addEventListener('change', function (e) { setFilter.year = e.target.value; render(); });
         if ($('s-groupyear')) $('s-groupyear').addEventListener('change', function (e) { setFilter.groupYear = e.target.checked; render(); });
+        Array.prototype.forEach.call(document.querySelectorAll('#set-lang-chips .chip'), function (ch) {
+          ch.addEventListener('click', function () { setFilter.lang = ch.getAttribute('data-slang'); render(); });
+        });
       } else {
         if ($('sd-missing')) $('sd-missing').addEventListener('change', function (e) { setDetailFilter.missingOnly = e.target.checked; render(); });
         var seg = $('sd-mode');
@@ -1087,7 +1449,7 @@
 
       $('f-nhap').addEventListener('submit', function (e) {
         e.preventDefault();
-        try {
+        withLoading(async function () {
           var qty = Math.floor(Number($('n-qty').value) || 0);
           var cost = parseVND($('n-cost').value);
           var date = $('n-date').value || BCT.todayISO();
@@ -1102,31 +1464,36 @@
             var gOrg = $('n-graded-org').value, gScore = $('n-graded-score').value.trim();
             var setName = $('n-set').value.trim();
             var setHit = lookupSetByName(setName);
-            var card = {
-              id: BCT.uid('card'), name: name,
-              set: setName, setId: setHit ? setHit.id : null,
+            var card = await BCT.addCard(S, {
+              name: name, set: setName, setId: setHit ? setHit.id : null,
               number: $('n-number').value.trim(),
               rarity: $('n-rarity').value, condition: $('n-cond').value,
               graded: gOrg ? { org: gOrg, score: gScore || '' } : null,
-              images: pendingImages.slice(), note: $('n-note').value.trim(),
-              createdAt: new Date().toISOString()
-            };
-            S.cards.push(card);
+              language: $('n-lang').value || 'en',
+              storageLocation: $('n-storage').value.trim(),
+              misprint: $('n-misprint').checked,
+              certNumber: $('n-cert').value.trim(),
+              certPop: $('n-pop').value.trim(),
+              note: $('n-note').value.trim()
+            });
             cardId = card.id;
           } else {
             cardId = cardSel.value;
           }
-          S.lots.push({
-            id: BCT.uid('lot'), cardId: cardId, qty: qty, qtyRemaining: qty,
-            costPerUnit: cost, importDate: date, source: source,
+          await BCT.addLot(S, {
+            cardId: cardId, qty: qty, costPerUnit: cost, importDate: date, source: source,
             variant: $('n-variant').value || 'Normal',
-            condition: 'NM', createdAt: new Date().toISOString()
+            holoPattern: $('n-holo').value || null,
+            condition: $('n-cond') ? $('n-cond').value : 'A'
           });
-          persist();
+          if (pendingImages.length) {
+            await BCT.uploadImageToCard(S, cardId, pendingImages);
+            toast('Đã tải lên ' + pendingImages.length + ' ảnh.');
+          }
           var c = BCT.getCard(S, cardId);
           toast('Đã nhập ' + qty + '× ' + c.name + '.');
           location.hash = '#/kho/' + cardId;
-        } catch (err) { toast(err.message); }
+        }).catch(function (err) { toast(err.message); });
       });
     }
 
@@ -1141,8 +1508,8 @@
 
       $('f-ban').addEventListener('submit', function (e) {
         e.preventDefault();
-        try {
-          var order = BCT.createOrder(S, {
+        withLoading(async function () {
+          var order = await BCT.createOrder(S, {
             date: $('b-date').value || BCT.todayISO(),
             channel: $('b-channel').value,
             buyer: $('b-buyer').value.trim(),
@@ -1151,10 +1518,9 @@
             note: $('b-note').value.trim(),
             lines: [{ cardId: $('b-card').value, qty: $('b-qty').value, sellPrice: parseVND($('b-price').value) }]
           });
-          persist();
           toast('Đã lưu đơn · lãi ' + BCT.fmtVND(BCT.orderProfit(order)) + '.');
           location.hash = '#/donhang/' + order.id;
-        } catch (err) { toast(err.message); }
+        }).catch(function (err) { toast(err.message); });
       });
     }
 
@@ -1166,5 +1532,4 @@
 
   /* ---------- boot ---------- */
   boot();
-  render();
 })();
