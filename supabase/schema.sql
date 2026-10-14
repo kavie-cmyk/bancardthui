@@ -26,6 +26,18 @@ create table if not exists set_totals (
   updated_at timestamptz not null default now()
 );
 
+-- Set do user tự tạo (bản local: state.customSets). 220 set TCGdex chỉ đọc, không lưu DB.
+create table if not exists custom_sets (
+  id text primary key,       -- 'custom-<rand>', khớp card.set_id
+  name text not null,
+  total integer not null check (total > 0),
+  official integer not null check (official > 0 and official <= total),
+  year integer,              -- năm phát hành, null nếu không rõ
+  note text default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_custom_sets_name on custom_sets (name);
+
 -- Mỗi lần nhập = 1 lô. Giá cost & ngày nhập giữ riêng từng lô để tính FIFO.
 create table if not exists inventory_lots (
   id uuid primary key default gen_random_uuid(),

@@ -16,9 +16,10 @@ Nút **"Xóa dữ liệu mẫu"** trên thanh header để bắt đầu kho tr�
 | Bảng | Trường chính |
 |---|---|
 | `cards` | id, name, set, setId (tcgdex), number, rarity, condition (NM/LP/MP), graded {org, score}, images[] (dataURL), note |
-| `lots` (inventory_lots) | id, cardId, qty, qtyRemaining, costPerUnit (VND), importDate, source |
+| `lots` (inventory_lots) | id, cardId, qty, qtyRemaining, costPerUnit (VND), importDate, source, variant (Normal/Reverse Holo/Holo/1st Edition) |
 | `orders` | id, date, channel (ebay/shopee/facebook/tructiep), items[] {cardId, lotId, qty, sellPrice, costPerUnit}, fees, shippingFee, buyer, note |
 | `setTotals` | {setKey: total} — tổng số lá do user nhập tay cho set không có trong danh sách chuẩn |
+| `customSets` | [{id ('custom-xxx'), name, total, official, year, note, createdAt}] — set do user tự tạo, card.setId trỏ tới đây |
 
 `listings` (rao bán) chưa có UI — dành cho Phase 2, schema đã có trong `supabase/schema.sql`.
 
@@ -38,6 +39,14 @@ Nút **"Xóa dữ liệu mẫu"** trên thanh header để bắt đầu kho tr�
 - Checklist có toggle **Set chuẩn / Master**: Master hiện breakdown phiên bản từng ô (vd "Reverse Holo ×2 · Holo ×1") mà không đổi cách tính tiến độ.
 - Bấm vào ô đã có → panel: xem card đang chiếm ô + variant, nút **Sửa lá**, form **Đổi số/set** (đổi số thứ tự, set, độ hiếm — lô & đơn giữ nguyên), **Gỡ khỏi set**.
 - Ô trống có nút **+ thêm** → mở Nhập kho đã điền sẵn set + số thứ tự.
+
+### Set tự tạo (Quản lý set)
+
+- Nút **Quản lý set** ở đầu trang Bộ sưu tập → route `#/sets/manage`.
+- 220 set TCGdex chỉ đọc; chỉ set tự tạo mới thêm/sửa/xóa được (lưu ở `state.customSets`, id dạng `custom-xxx`).
+- Thêm/sửa: Tên set (bắt buộc), Năm phát hành (tùy chọn), Tổng số lá (bắt buộc, >0), Số lá chính (bắt buộc, ≤ tổng), Ghi chú. Validate inline.
+- Xóa set đang có card → panel xác nhận, bắt buộc tick "Chuyển N lá sang Chưa phân loại" rồi mới xóa; các card bị gỡ `setId`.
+- Set tự tạo xuất hiện đầu danh sách gợi ý khi nhập set (gắn tag "Tự tạo"), render trong Bộ sưu tập/checklist/lọc năm y như set chuẩn.
 
 ## FIFO — logic cốt lõi
 

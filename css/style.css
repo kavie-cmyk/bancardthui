@@ -395,3 +395,7 @@ a.num-cell.missing:hover .num-add { opacity: 1; }
 .slot-x { background: none; border: 0; color: var(--muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 4px 8px; }
 .slot-x:hover { color: var(--ink); }
 .slot-card { border: 1px solid var(--line-soft); border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+
+/* ---- quản lý set tự tạo ---- */
+.form-err { color: var(--red, #e07a6a); font-size: 13px; background: rgba(224,122,106,.08); border: 1px solid rgba(224,122,106,.35); border-radius: 10px; padding: 10px 14px; margin: 4px 0 12px; }
+.confirm-box { border: 1px solid rgba(224,122,106,.4); background: rgba(224,122,106,.06); border-radius: 12px; padding: 14px 16px; margin-top: 14px; font-size: 13.5px; }

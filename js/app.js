@@ -107,7 +107,7 @@
     window.scrollTo(0, 0);
     if (base === 'dashboard') app.innerHTML = vDashboard();
     else if (base === 'kho') app.innerHTML = (r.segs[1] && r.segs[2] === 'edit') ? vCardEdit(r.segs[1]) : (r.segs[1] ? vCardDetail(r.segs[1]) : vKho());
-    else if (base === 'sets') app.innerHTML = r.segs.length > 1 ? vSetDetail(decodeURIComponent(r.segs.slice(1).join('/'))) : vSets();
+    else if (base === 'sets') app.innerHTML = r.segs[1] === 'manage' ? vSetManage(r.query) : (r.segs.length > 1 ? vSetDetail(decodeURIComponent(r.segs.slice(1).join('/'))) : vSets());
     else if (base === 'nhap') app.innerHTML = vNhap(r.query);
     else if (base === 'ban') app.innerHTML = vBan(r.query.card || '');
     else if (base === 'donhang') app.innerHTML = r.segs[1] ? vOrderDetail(r.segs[1]) : vDonHang();
@@ -440,6 +440,7 @@
       years.map(function (y) { return '<option value="' + y + '"' + (setFilter.year === String(y) ? ' selected' : '') + '>Năm ' + y + '</option>'; }).join('') +
       '<option value="unknown"' + (setFilter.year === 'unknown' ? ' selected' : '') + '>Chưa rõ năm</option></select>';
     html += '<label class="chk"><input type="checkbox" id="s-groupyear"' + (setFilter.groupYear ? ' checked' : '') + '> Nhóm theo năm</label>';
+    html += '<a class="btn secondary btn-sm" href="#/sets/manage" style="text-decoration:none;margin-left:auto">' + IC.edit + ' Quản lý set</a>';
     html += '</div>';
 
     if (!withP.length && !unclassified.length) {
@@ -479,6 +480,7 @@
     var link = '#/sets/' + encodeURIComponent(g.key);
     var html = '<a class="set-card" href="' + link + '">';
     html += '<div class="set-name">' + BCT.esc(info.name) + '</div>';
+    if (info.custom) html += '<div><span class="tag" style="font-size:10px">Tự tạo</span></div>';
     if (info.year != null) html += '<div class="set-year">' + info.year + '</div>';
     if (p.total != null) {
       html += '<div class="progress"><div class="progress-bar" style="width:' + p.pct + '%"></div></div>';
@@ -494,6 +496,53 @@
     if (p.secrets.length) html += '<span class="secret-tag">' + p.secrets.length + ' secret</span>';
     html += '</div></a>';
     return html;
+  }
+
+  /* ================= VIEW: QUẢN LÝ SET TỰ TẠO ================= */
+  function vSetManage(q) {
+    q = q || {};
+    var editing = q.edit ? BCT.getCustomSet(S, q.edit) : null;
+    var html = '<a class="backlink" href="#/sets">' + IC.back + ' Bộ sưu tập</a>';
+    html += '<h1 class="page-title">Quản lý set</h1>';
+    html += '<p class="page-sub">220 set chuẩn từ TCGdex chỉ đọc — chỉ set tự tạo mới sửa/xóa được.</p>';
+
+    html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Set tự tạo (' + S.customSets.length + ')</h2></div>';
+    if (!S.customSets.length) {
+      html += '<p class="panel-note">Chưa có set tự tạo nào. Dùng form bên dưới để thêm set riêng của Bự (vd set promo, set custom).</p>';
+    } else {
+      html += '<table class="tbl"><thead><tr><th>Tên set</th><th>Năm</th><th class="r">Lá chính / Tổng</th><th class="r">Card đang gắn</th><th></th></tr></thead><tbody>';
+      S.customSets.forEach(function (s) {
+        var n = BCT.cardsOfCustomSet(S, s.id).length;
+        html += '<tr><td><b>' + BCT.esc(s.name) + '</b>' + (s.note ? '<div class="s">' + BCT.esc(s.note) + '</div>' : '') + '</td>' +
+          '<td>' + (s.year != null ? s.year : '—') + '</td>' +
+          '<td class="r">' + s.official + ' / ' + s.total + '</td>' +
+          '<td class="r">' + n + '</td>' +
+          '<td class="r"><a class="rowlink" href="#/sets/manage?edit=' + s.id + '">Sửa</a> · ' +
+          '<a class="rowlink" href="javascript:void(0)" data-cset-del="' + s.id + '" style="color:#e07a6a">Xóa</a></td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '<div id="cset-confirm"></div></section>';
+
+    html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">' + (editing ? 'Sửa set tự tạo' : 'Thêm set mới') + '</h2></div>';
+    html += '<form id="f-cset"><div class="form-grid">';
+    if (editing) html += '<input type="hidden" id="cs-id" value="' + editing.id + '">';
+    html += '<div class="field"><label>Tên set *</label><input id="cs-name" placeholder="VD: Promo Box Bự" value="' + BCT.esc(editing ? editing.name : '') + '"></div>';
+    html += '<div class="field"><label>Năm phát hành</label><input id="cs-year" inputmode="numeric" placeholder="VD: 2024" value="' + (editing && editing.year != null ? editing.year : '') + '"><div class="hint">Để trống nếu không rõ.</div></div>';
+    html += '<div class="field"><label>Tổng số lá *</label><input id="cs-total" inputmode="numeric" placeholder="VD: 60" value="' + (editing ? editing.total : '') + '"><div class="hint">Gồm cả secret rare.</div></div>';
+    html += '<div class="field"><label>Số lá chính *</label><input id="cs-official" inputmode="numeric" placeholder="VD: 54" value="' + (editing ? editing.official : '') + '"><div class="hint">Không vượt tổng số lá.</div></div>';
+    html += '<div class="field full"><label>Ghi chú</label><input id="cs-note" placeholder="VD: set tự in cho event" value="' + BCT.esc(editing ? editing.note : '') + '"></div>';
+    html += '</div><div class="form-err" id="cs-err" hidden></div>';
+    html += '<div class="form-actions"><button class="btn" type="submit">' + IC.check + (editing ? ' Lưu thay đổi' : ' Thêm set') + '</button>' +
+      (editing ? '<a class="btn secondary" href="#/sets/manage" style="text-decoration:none">Hủy</a>' : '') + '</div>';
+    html += '</form></section>';
+    return html;
+  }
+
+  function showCsetErr(msg) {
+    var el = document.getElementById('cs-err');
+    if (el) { el.textContent = msg; el.hidden = false; }
+    else toast(msg);
   }
 
   /* ================= VIEW: CHECKLIST 1 SET ================= */
@@ -673,27 +722,96 @@
     return html;
   }
 
+  /* ---------- bind: quản lý set tự tạo ---------- */
+  function bindSetManage() {
+    var form = $('f-cset');
+    if (form) form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      try {
+        var input = {
+          name: $('cs-name').value, year: $('cs-year').value,
+          total: $('cs-total').value, official: $('cs-official').value, note: $('cs-note').value
+        };
+        var idEl = $('cs-id');
+        if (idEl && idEl.value) {
+          BCT.updateCustomSet(S, idEl.value, input);
+          toast('Đã lưu thay đổi set.');
+        } else {
+          var s = BCT.createCustomSet(S, input);
+          toast('Đã thêm set "' + s.name + '".');
+        }
+        persist();
+        if (location.hash === '#/sets/manage') render();
+        else location.hash = '#/sets/manage';
+      } catch (err) { showCsetErr(err.message); }
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-cset-del]'), function (el) {
+      el.addEventListener('click', function () {
+        var id = el.getAttribute('data-cset-del');
+        var s = BCT.getCustomSet(S, id);
+        if (!s) return;
+        var n = BCT.cardsOfCustomSet(S, id).length;
+        if (!n) {
+          if (!confirm('Xóa set "' + s.name + '"?')) return;
+          BCT.deleteCustomSet(S, id); persist(); toast('Đã xóa set.'); render();
+          return;
+        }
+        // Có card đang gắn → panel xác nhận, bắt buộc chuyển card sang Chưa phân loại
+        var box = $('cset-confirm');
+        box.innerHTML = '<div class="confirm-box"><div><b>Set "' + BCT.esc(s.name) + '" đang có ' + n + ' card.</b><br>' +
+          '<label class="chk" style="margin-top:8px"><input type="checkbox" id="cc-move" checked disabled> Chuyển ' + n + ' lá sang <b>Chưa phân loại</b> (bắt buộc)</label></div>' +
+          '<div class="form-actions" style="margin-top:10px"><button class="btn danger" id="cc-yes">Xóa set</button>' +
+          '<button class="btn secondary" id="cc-no">Hủy</button></div></div>';
+        $('cc-no').addEventListener('click', function () { box.innerHTML = ''; });
+        $('cc-yes').addEventListener('click', function () {
+          if (!$('cc-move').checked) { toast('Phải chuyển card sang Chưa phân loại trước khi xóa.'); return; }
+          var moved = BCT.deleteCustomSet(S, id);
+          persist(); toast('Đã xóa set · ' + moved + ' lá chuyển sang Chưa phân loại.'); render();
+        });
+        box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    });
+  }
+
   /* ================= VIEW: NHẬP KHO ================= */
   var pendingImages = [];
 
   function setDatalistOptions() {
-    if (!window.BCT_SETS) return '';
-    return window.BCT_SETS.list.map(function (s) {
+    var out = '';
+    (S.customSets || []).forEach(function (s) {
+      out += '<option value="' + BCT.esc(s.name) + '" label="Tự tạo">';
+    });
+    if (window.BCT_SETS) out += window.BCT_SETS.list.map(function (s) {
       return '<option value="' + BCT.esc(s.name) + '">';
     }).join('');
+    return out;
   }
 
-  // Tìm set theo tên user gõ → hint tổng số lá + setId tương ứng
+  // Tìm set theo tên user gõ → ưu tiên set tự tạo, rồi mới tới TCGdex
   function lookupSetByName(name) {
-    if (!window.BCT_SETS || !name) return null;
+    if (!name) return null;
+    var cs = BCT.customSetByName(S, name);
+    if (cs) return { id: cs.id, name: cs.name, total: cs.total, official: cs.official, year: cs.year, custom: true };
+    if (!window.BCT_SETS) return null;
     return window.BCT_SETS.byName(name);
+  }
+
+  // Tìm set theo id (dùng cho prefill từ checklist) → ưu tiên set tự tạo
+  function lookupSetById(id) {
+    if (!id) return null;
+    var cs = BCT.getCustomSet(S, id);
+    if (cs) return { id: cs.id, name: cs.name, total: cs.total, official: cs.official, year: cs.year, custom: true };
+    if (window.BCT_SETS && window.BCT_SETS.byId) return window.BCT_SETS.byId(id);
+    return null;
   }
 
   function setHintHTML(name) {
     var s = lookupSetByName(name);
     if (!s) return 'Gõ tên set hoặc nhập tên khác tự do.';
     var secret = s.total - s.official;
-    return 'Set này có <b>' + s.official + ' lá chính</b>' + (secret > 0 ? ' + <b>' + secret + ' secret</b>' : '') +
+    return (s.custom ? '<span class="tag" style="font-size:10px">Tự tạo</span> ' : '') +
+      'Set này có <b>' + s.official + ' lá chính</b>' + (secret > 0 ? ' + <b>' + secret + ' secret</b>' : '') +
       ' (tổng ' + s.total + ' lá).';
   }
 
@@ -704,8 +822,8 @@
     // Prefill từ checklist: #/nhap?newcard=1&setkey=<id>&num=<n>
     var forceNew = q.newcard === '1';
     var preSetName = '', preNum = q.num || '';
-    if (forceNew && q.setkey && window.BCT_SETS && window.BCT_SETS.byId) {
-      var ps = window.BCT_SETS.byId(q.setkey);
+    if (forceNew && q.setkey) {
+      var ps = lookupSetById(q.setkey);
       if (ps) preSetName = ps.name;
     }
     var html = '<h1 class="page-title">Nhập kho</h1><p class="page-sub">Mỗi lần nhập là một lô riêng — giá cost khác nhau theo ngày được giữ nguyên để tính FIFO</p>';
@@ -927,7 +1045,9 @@
           });
         }
       });
-      if (!r.segs[1]) {
+      if (r.segs[1] === 'manage') {
+        bindSetManage();
+      } else if (!r.segs[1]) {
         if ($('s-sort')) $('s-sort').addEventListener('change', function (e) { setFilter.sort = e.target.value; render(); });
         if ($('s-year')) $('s-year').addEventListener('change', function (e) { setFilter.year = e.target.value; render(); });
         if ($('s-groupyear')) $('s-groupyear').addEventListener('change', function (e) { setFilter.groupYear = e.target.checked; render(); });

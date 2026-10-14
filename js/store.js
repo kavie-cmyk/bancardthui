@@ -56,7 +56,7 @@
 
   // ---------- state ----------
   function blankState() {
-    return { cards: [], lots: [], orders: [], setTotals: {}, isSeeded: false, createdAt: new Date().toISOString() };
+    return { cards: [], lots: [], orders: [], setTotals: {}, customSets: [], isSeeded: false, createdAt: new Date().toISOString() };
   }
 
   var mem = (typeof localStorage === 'undefined');
@@ -79,6 +79,7 @@
       var s = JSON.parse(raw);
       s.cards = s.cards || []; s.lots = s.lots || []; s.orders = s.orders || [];
       s.setTotals = s.setTotals || {}; // backfill cho state cũ
+      s.customSets = s.customSets || []; // backfill cho state cũ
       s.lots.forEach(function (l) { if (!l.variant) l.variant = 'Normal'; }); // backfill variant
       return s;
     } catch (e) { return blankState(); }
@@ -329,13 +330,87 @@
     return n > 0 ? n : null;
   }
 
-  // Phân giải thông tin set của card. Thứ tự: db theo setId → db theo tên chính xác
+  // ---------- set tự tạo (custom sets) ----------
+  function customUid() {
+    return 'custom-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function getCustomSet(state, id) {
+    if (!id || !state.customSets) return null;
+    for (var i = 0; i < state.customSets.length; i++) {
+      if (state.customSets[i].id === id) return state.customSets[i];
+    }
+    return null;
+  }
+
+  function customSetByName(state, name) {
+    if (!name || !state.customSets) return null;
+    var n = String(name).toLowerCase().trim();
+    for (var i = 0; i < state.customSets.length; i++) {
+      if (String(state.customSets[i].name).toLowerCase().trim() === n) return state.customSets[i];
+    }
+    return null;
+  }
+
+  function validateCustomSet(input) {
+    var errs = [];
+    var name = String(input.name || '').trim();
+    if (!name) errs.push('Nhập tên set.');
+    var total = Math.floor(Number(input.total));
+    if (!(total > 0)) errs.push('Tổng số lá phải là số nguyên lớn hơn 0.');
+    var official = Math.floor(Number(input.official));
+    if (!(official > 0)) errs.push('Số lá chính phải là số nguyên lớn hơn 0.');
+    else if (total > 0 && official > total) errs.push('Số lá chính không được vượt tổng số lá.');
+    var year = (input.year == null || input.year === '') ? null : Math.floor(Number(input.year));
+    if (year != null && !(year >= 1990 && year <= 2100)) errs.push('Năm phát hành không hợp lệ.');
+    if (errs.length) throw new Error(errs.join(' '));
+    return { name: name, total: total, official: official, year: year, note: String(input.note || '').trim() };
+  }
+
+  function createCustomSet(state, input) {
+    var v = validateCustomSet(input);
+    var s = { id: customUid(), name: v.name, total: v.total, official: v.official,
+      year: v.year, note: v.note, createdAt: new Date().toISOString() };
+    state.customSets.push(s);
+    return s;
+  }
+
+  function updateCustomSet(state, id, input) {
+    var s = getCustomSet(state, id);
+    if (!s) throw new Error('Không tìm thấy set.');
+    var v = validateCustomSet(input);
+    s.name = v.name; s.total = v.total; s.official = v.official; s.year = v.year; s.note = v.note;
+    return s;
+  }
+
+  function cardsOfCustomSet(state, id) {
+    return state.cards.filter(function (c) { return c.setId === id; });
+  }
+
+  // Xóa set tự tạo: các card đang gắn sẽ bị gỡ khỏi set (setId=null). Trả về số card bị dời.
+  function deleteCustomSet(state, id) {
+    var moved = 0;
+    state.cards.forEach(function (c) {
+      if (c.setId === id) { c.setId = null; c.set = ''; moved++; }
+    });
+    state.customSets = state.customSets.filter(function (s) { return s.id !== id; });
+    return moved;
+  }
+
+  // Phân giải thông tin set của card. Thứ tự: custom set theo id → db theo setId →
   // → user tự nhập (state.setTotals) → null (chưa rõ).
   // Trả về { key, id, name, total, official, year, source }
   function resolveSet(state, cardOrKey) {
     var key, setId = null, name = null;
     if (typeof cardOrKey === 'string') { key = cardOrKey; }
     else { setId = cardOrKey.setId || null; name = cardOrKey.set || null; key = setId || name || ''; }
+    var csById = (setId && getCustomSet(state, setId)) ||
+      (typeof cardOrKey === 'string' && getCustomSet(state, cardOrKey));
+    if (csById) {
+      var c0 = csById;
+      return { key: c0.id, id: c0.id, name: c0.name, total: c0.total, official: c0.official,
+        year: c0.year, note: c0.note, source: 'custom', custom: true };
+    }
     var db = setsDB(), info = null;
     if (db) {
       if (setId) info = db.byId(setId);
@@ -345,6 +420,12 @@
     if (info) {
       return { key: info.id, id: info.id, name: info.name, total: info.total,
         official: info.official, year: info.year == null ? null : info.year, source: 'db' };
+    }
+    var csByName = name && customSetByName(state, name);
+    if (csByName) {
+      var c1 = csByName;
+      return { key: c1.id, id: c1.id, name: c1.name, total: c1.total, official: c1.official,
+        year: c1.year, note: c1.note, source: 'custom', custom: true };
     }
     if (key && state.setTotals && state.setTotals[key] != null) {
       var t = Math.floor(Number(state.setTotals[key]));
@@ -445,7 +526,10 @@
     priceHistory: priceHistory, ordersOfCard: ordersOfCard,
     parseCardNumber: parseCardNumber, resolveSet: resolveSet, isSecretCard: isSecretCard,
     setGroups: setGroups, setProgress: setProgress, setManualTotal: setManualTotal,
-    yearGroups: yearGroups
+    yearGroups: yearGroups,
+    getCustomSet: getCustomSet, customSetByName: customSetByName,
+    createCustomSet: createCustomSet, updateCustomSet: updateCustomSet,
+    deleteCustomSet: deleteCustomSet, cardsOfCustomSet: cardsOfCustomSet
   };
 
   root.BCT = BCT;
