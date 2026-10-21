@@ -283,7 +283,7 @@
     var app = document.getElementById('app');
     window.scrollTo(0, 0);
     if (base === 'dashboard') app.innerHTML = vDashboard();
-    else if (base === 'kho') app.innerHTML = (r.segs[1] && r.segs[2] === 'edit') ? vCardEdit(r.segs[1]) : (r.segs[1] ? vCardDetail(r.segs[1]) : vKho());
+    else if (base === 'kho') app.innerHTML = (r.segs[1] && r.segs[2] === 'edit') ? vCardEdit(r.segs[1]) : (r.segs[1] && r.segs[2] === 'lot' && r.segs[3]) ? vLotEdit(r.segs[1], r.segs[3]) : (r.segs[1] ? vCardDetail(r.segs[1]) : vKho());
     else if (base === 'sets') app.innerHTML = r.segs[1] === 'manage' ? vSetManage(r.query) : (r.segs.length > 1 ? vSetDetail(decodeURIComponent(r.segs.slice(1).join('/'))) : vSets());
     else if (base === 'nhap') app.innerHTML = vNhap(r.query);
     else if (base === 'quet') app.innerHTML = vQuet();
@@ -631,13 +631,14 @@
     html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Các lô nhập (' + allLots.length + ')</h2><span class="panel-note">FIFO: bán trừ lô cũ nhất trước</span></div>';
     if (!allLots.length) html += '<p class="panel-note">Chưa có lô nào.</p>';
     else {
-      html += '<table class="tbl"><thead><tr><th>Ngày nhập</th><th class="r">Còn lại / Gốc</th><th class="r">Giá cost</th><th>Phiên bản</th><th>Mẫu holo</th><th>Nguồn</th></tr></thead><tbody>';
+      html += '<table class="tbl"><thead><tr><th>Ngày nhập</th><th class="r">Còn lại / Gốc</th><th class="r">Giá cost</th><th>Phiên bản</th><th>Mẫu holo</th><th>Nguồn</th><th></th></tr></thead><tbody>';
       allLots.forEach(function (l, i) {
         html += '<tr><td>' + BCT.fmtDate(l.importDate) + (i === 0 && l.qtyRemaining > 0 ? ' <span class="tag" style="font-size:9px">FIFO trước</span>' : '') + '</td>' +
           '<td class="r">' + l.qtyRemaining + ' / ' + l.qty + '</td><td class="r">' + BCT.fmtVND(l.costPerUnit) + '</td>' +
           '<td><span class="tag">' + BCT.esc(l.variant || 'Normal') + '</span></td>' +
           '<td>' + (l.holoPattern ? '<span class="tag" style="border-color:var(--gold-dim)">' + BCT.esc(l.holoPattern) + '</span>' : '<span style="color:var(--muted)">—</span>') + '</td>' +
-          '<td>' + BCT.esc(l.source || '—') + '</td></tr>';
+          '<td>' + BCT.esc(l.source || '—') + '</td>' +
+          '<td class="r"><a class="btn secondary btn-sm" style="text-decoration:none" href="#/kho/' + c.id + '/lot/' + l.id + '">Sửa lô</a></td></tr>';
       });
       html += '</tbody></table>';
     }
@@ -1047,6 +1048,38 @@
     html += '<div class="field full"><label>Ghi chú</label><textarea id="e-note">' + BCT.esc(c.note || '') + '</textarea></div>';
     html += '</div><div class="form-actions"><button class="btn" type="submit">' + IC.check + ' Lưu thay đổi</button><a class="btn secondary" href="#/kho/' + c.id + '" style="text-decoration:none">Hủy</a></div>';
     html += '</section></form>';
+    html += '<section class="panel" style="border-color:rgba(224,122,106,.4)"><div class="panel-head"><h2 class="panel-title" style="color:var(--red)">Xóa lá này</h2></div>' +
+      '<p class="panel-note">Xóa hẳn lá khỏi kho, kèm toàn bộ lô nhập, ảnh đã tải lên và tin rao của lá. Chỉ xóa được khi lá <b>chưa từng có đơn bán</b> (để giữ sổ sách). Hành động này <b>không hoàn tác được</b> — hợp với trường hợp nhập sai lá.</p>' +
+      '<div class="form-actions"><button type="button" class="btn danger" id="card-del">Xóa lá này khỏi kho</button></div></section>';
+    return html;
+  }
+
+  function vLotEdit(cardId, lotId) {
+    var c = BCT.getCard(S, cardId);
+    var lot = BCT.getLot(S, lotId);
+    if (!c || !lot || lot.cardId !== cardId) {
+      return '<a class="backlink" href="#/kho/' + cardId + '">' + IC.back + ' Chi tiết lá</a><div class="empty"><h3>Không tìm thấy lô</h3></div>';
+    }
+    var sold = lot.qty - lot.qtyRemaining;
+    var html = '<a class="backlink" href="#/kho/' + c.id + '">' + IC.back + ' ' + BCT.esc(c.name) + '</a>';
+    html += '<h1 class="page-title">Sửa lô nhập</h1><p class="page-sub">Lô nhập ngày ' + BCT.fmtDate(lot.importDate) + ' của lá <b>' + BCT.esc(c.name) + '</b>' +
+      (sold > 0 ? ' · Lô này đã bán ' + sold + ' lá qua đơn hàng — số lượng gốc không sửa xuống dưới ' + sold + ' được, và không xóa được lô.' : '') + '</p>';
+    html += '<form id="f-lotedit"><section class="panel"><div class="form-grid">';
+    html += '<div class="field"><label>Số lượng nhập (tổng của lô) *</label><input id="l-qty" type="number" min="1" step="1" value="' + lot.qty + '"><div class="hint">Hiện còn lại ' + lot.qtyRemaining + ' / ' + lot.qty + ' lá trong kho.</div></div>';
+    html += '<div class="field"><label>Giá vốn / lá (đ) *</label><input id="l-cost" value="' + BCT.fmtVND(lot.costPerUnit).replace(/[^\d.]/g, '') + '" inputmode="numeric"></div>';
+    html += '<div class="field"><label>Ngày nhập</label><input id="l-date" type="date" value="' + BCT.esc(lot.importDate || '') + '"></div>';
+    html += '<div class="field"><label>Nguồn mua</label><input id="l-source" value="' + BCT.esc(lot.source || '') + '" placeholder="VD: Mua sỉ anh A"></div>';
+    html += '<div class="field"><label>Condition của lô</label><select id="l-cond">' +
+      BCT.CONDITIONS.map(function (k) { return '<option' + ((lot.condition || 'A') === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></div>';
+    html += '<div class="field"><label>Phiên bản</label><select id="l-variant">' +
+      BCT.VARIANTS.map(function (v) { return '<option value="' + BCT.esc(v) + '"' + ((lot.variant || 'Normal') === v ? ' selected' : '') + '>' + BCT.esc((BCT.VARIANT_LABELS && BCT.VARIANT_LABELS[v]) || v) + '</option>'; }).join('') + '</select></div>';
+    html += '<div class="field"><label>Mẫu holo</label><select id="l-holo"><option value="">— Không có —</option>' +
+      BCT.HOLO_PATTERNS.map(function (h) { return '<option' + (lot.holoPattern === h ? ' selected' : '') + '>' + BCT.esc(h) + '</option>'; }).join('') + '</select></div>';
+    html += '</div><div class="form-actions"><button class="btn" type="submit">' + IC.check + ' Lưu thay đổi</button><a class="btn secondary" href="#/kho/' + c.id + '" style="text-decoration:none">Hủy</a></div>';
+    html += '</section></form>';
+    html += '<section class="panel" style="border-color:rgba(224,122,106,.4)"><div class="panel-head"><h2 class="panel-title" style="color:var(--red)">Xóa lô này</h2></div>' +
+      '<p class="panel-note">Xóa hẳn lô nhập này khỏi kho (dùng khi nhập sai lô).' + (sold > 0 ? ' <b>Lô đã bán ' + sold + ' lá nên không xóa được</b> — hãy sửa số lượng thay vì xóa.' : '') + '</p>' +
+      '<div class="form-actions"><button type="button" class="btn danger" id="lot-del"' + (sold > 0 ? ' disabled' : '') + '>Xóa lô này</button></div></section>';
     return html;
   }
 
@@ -1609,6 +1642,52 @@
           toast('Đã lưu thay đổi.');
           location.hash = '#/kho/' + cid;
         }).catch(function (err) { toast(err.message); });
+      });
+      var cardDel = $('card-del');
+      if (cardDel) cardDel.addEventListener('click', function () {
+        var cc = BCT.getCard(S, cid);
+        if (!cc) return;
+        var nOrders = BCT.ordersOfCard(S, cid).length;
+        if (nOrders) { toast('Lá này đã có ' + nOrders + ' đơn bán — không xóa được để giữ sổ sách.', 'err'); return; }
+        var nLots = S.lots.filter(function (l) { return l.cardId === cid; }).length;
+        var stock = BCT.stockOf(S, cid);
+        if (!confirm('Xóa hẳn lá "' + cc.name + '" khỏi kho?\n· Tồn kho hiện tại: ' + stock + ' lá\n· Số lô nhập sẽ bị xóa theo: ' + nLots + '\n· Ảnh và tin rao của lá cũng bị xóa\n\nHành động này KHÔNG hoàn tác được.')) return;
+        withLoading(async function () {
+          await BCT.deleteCard(S, cid);
+          toast('Đã xóa lá "' + cc.name + '" khỏi kho.');
+          location.hash = '#/kho';
+        }).catch(function (err) { toast(err.message, 'err'); });
+      });
+    }
+
+    if (base === 'kho' && r.segs[2] === 'lot' && $('f-lotedit')) {
+      var lcid = r.segs[1], llid = r.segs[3];
+      $('f-lotedit').addEventListener('submit', function (e) {
+        e.preventDefault();
+        withLoading(async function () {
+          await BCT.updateLot(S, llid, {
+            qty: Number($('l-qty').value),
+            costPerUnit: parseVND($('l-cost').value),
+            importDate: $('l-date').value || null,
+            source: $('l-source').value.trim(),
+            condition: $('l-cond').value,
+            variant: $('l-variant').value,
+            holoPattern: $('l-holo').value || null
+          });
+          toast('Đã lưu thay đổi lô.');
+          location.hash = '#/kho/' + lcid;
+        }).catch(function (err) { toast(err.message, 'err'); });
+      });
+      var lotDel = $('lot-del');
+      if (lotDel) lotDel.addEventListener('click', function () {
+        var lot = BCT.getLot(S, llid);
+        if (!lot) return;
+        if (!confirm('Xóa hẳn lô nhập ngày ' + BCT.fmtDate(lot.importDate) + ' (' + lot.qty + ' lá, cost ' + BCT.fmtVND(lot.costPerUnit) + '/lá)?\nHành động này KHÔNG hoàn tác được.')) return;
+        withLoading(async function () {
+          await BCT.deleteLot(S, llid);
+          toast('Đã xóa lô.');
+          location.hash = '#/kho/' + lcid;
+        }).catch(function (err) { toast(err.message, 'err'); });
       });
     }
 

@@ -434,6 +434,75 @@
     return lot;
   }
 
+  function getLot(state, lotId) {
+    for (var i = 0; i < state.lots.length; i++) if (state.lots[i].id === lotId) return state.lots[i];
+    return null;
+  }
+
+  // Sửa 1 lô nhập (số lượng gốc, giá cost, ngày, nguồn, condition, phiên bản, mẫu holo).
+  // Số đã bán = qty − qtyRemaining là lịch sử đơn hàng, không sửa lùi được:
+  // qty gốc mới phải >= số đã bán, qtyRemaining mới = qty mới − đã bán.
+  async function updateLot(state, lotId, patch) {
+    var lot = getLot(state, lotId);
+    if (!lot) throw new Error('Không tìm thấy lô.');
+    var sold = lot.qty - lot.qtyRemaining;
+    var row = {};
+    if (patch.qty !== undefined) {
+      var newQty = Math.floor(Number(patch.qty) || 0);
+      if (newQty < 1) throw new Error('Số lượng lô phải từ 1 trở lên. Muốn bỏ hẳn lô này thì dùng nút Xóa lô.');
+      if (newQty < sold) throw new Error('Lô này đã bán ' + sold + ' lá qua đơn hàng — không sửa số lượng gốc xuống dưới ' + sold + ' được.');
+      row.qty = newQty;
+      row.qty_remaining = newQty - sold;
+    }
+    if (patch.costPerUnit !== undefined) {
+      var cost = Math.round(Number(patch.costPerUnit) || 0);
+      if (cost < 0) throw new Error('Giá cost không hợp lệ.');
+      row.cost_per_unit = cost;
+    }
+    if (patch.importDate !== undefined) row.import_date = patch.importDate || null;
+    if (patch.source !== undefined) row.source = patch.source || '';
+    if (patch.condition !== undefined) row.condition = patch.condition || 'A';
+    if (patch.variant !== undefined) row.variant = patch.variant || 'Normal';
+    if (patch.holoPattern !== undefined) row.holo_pattern = patch.holoPattern || null;
+    await tolerantUpd('inventory_lots', row, { id: lotId }, LOT_MAYBE_COLS);
+    if (row.qty !== undefined) { lot.qty = row.qty; lot.qtyRemaining = row.qty_remaining; }
+    if (row.cost_per_unit !== undefined) lot.costPerUnit = row.cost_per_unit;
+    if (row.import_date !== undefined) lot.importDate = row.import_date;
+    if (row.source !== undefined) lot.source = row.source;
+    if (row.condition !== undefined) lot.condition = row.condition;
+    if (row.variant !== undefined) lot.variant = row.variant;
+    if (row.holo_pattern !== undefined) lot.holoPattern = row.holo_pattern;
+    return lot;
+  }
+
+  // Xóa 1 lô nhập — chỉ khi lô chưa bán lá nào (giữ sổ sách đơn hàng).
+  async function deleteLot(state, lotId) {
+    var lot = getLot(state, lotId);
+    if (!lot) throw new Error('Không tìm thấy lô.');
+    var sold = lot.qty - lot.qtyRemaining;
+    if (sold > 0) throw new Error('Lô này đã bán ' + sold + ' lá qua đơn hàng — không xóa được để giữ sổ sách. Hãy sửa số lượng lô thay vì xóa.');
+    await SB.del('inventory_lots', { id: lotId });
+    state.lots = state.lots.filter(function (l) { return l.id !== lotId; });
+    return true;
+  }
+
+  // Xóa hẳn 1 lá khỏi kho: xóa kèm các lô nhập, ảnh, tin rao của lá đó.
+  // Chặn khi lá đã có đơn bán — giữ sổ sách bán hàng nguyên vẹn.
+  async function deleteCard(state, cardId) {
+    var c = getCard(state, cardId);
+    if (!c) throw new Error('Không tìm thấy card.');
+    var ords = ordersOfCard(state, cardId);
+    if (ords.length) throw new Error('Lá này đã có ' + ords.length + ' đơn bán — không xóa được để giữ sổ sách. Xóa chỉ dùng cho lá nhập sai, chưa bán bao giờ.');
+    try { await SB.del('listings', { card_id: cardId }); } catch (e) { /* bảng listings có thể chưa tồn tại */ }
+    await SB.del('card_images', { card_id: cardId });
+    await SB.del('inventory_lots', { card_id: cardId });
+    await SB.del('cards', { id: cardId });
+    state.cards = state.cards.filter(function (x) { return x.id !== cardId; });
+    state.lots = state.lots.filter(function (l) { return l.cardId !== cardId; });
+    if (state.listings) state.listings = state.listings.filter(function (l) { return l.cardId !== cardId; });
+    return true;
+  }
+
   // ---------- FIFO ----------
   function lotsSorted(state, cardId) {
     return state.lots
@@ -1407,7 +1476,7 @@
     fmtVND: fmtVND, fmtVNDShort: fmtVNDShort, fmtDate: fmtDate, todayISO: todayISO, esc: esc,
     blankState: blankState, load: load,
     addCard: addCard, updateCard: updateCard, uploadImageToCard: uploadImageToCard,
-    addLot: addLot,
+    addLot: addLot, getLot: getLot, updateLot: updateLot, deleteLot: deleteLot, deleteCard: deleteCard,
     previewFIFO: previewFIFO, consumeFIFO: consumeFIFO, lotsSorted: lotsSorted,
     getCard: getCard, stockOf: stockOf, avgCostOf: avgCostOf, cardByName: cardByName,
     variantBreakdown: variantBreakdown,
