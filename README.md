@@ -98,10 +98,21 @@ TCGdex CDN (dựng từ set_id + số thứ tự + ngôn ngữ) → ảnh placeh
 ## Giá tham khảo thị trường
 
 - Nguồn giá cấu hình ở `js/config.js` → `PRICE_SOURCE_DEFS` (cơ chế pluggable: thêm def + đăng ký fetcher trong `PRICE_FETCHERS` ở `js/store.js`).
-- Đang chạy: **Cardmarket** và **TCGplayer**, tự kéo qua TCGdex pricing theo set_id + số thứ tự.
-- **eBay**: đang chờ eBay duyệt App ID (tài khoản dev `kavie2004`) — `EBAY_APP_ID` còn trống, `fetchEbayPricing` trong `js/store.js` là TODO, nguồn này hiển thị "sắp có". Có App ID thì dán vào `js/config.js` và viết thân hàm fetch.
+- Đang chạy: **Cardmarket** và **TCGplayer**. Trình duyệt lấy TCGdex theo đúng ngôn ngữ + set_id + số lá. Nếu còn thiếu, gọi `price-proxy` ngay; không thử đổi tiếng Anh sang Pháp/Đức để lấy giá.
+- Máy chủ có thêm nguồn giá TCGplayer qua [TCGCSV](https://tcgcsv.com/docs), ghép **đúng bộ bài → số lá → productId → marketPrice**. Trường hợp trùng mã sản phẩm không phân biệt được thì bỏ qua, không chọn đại. Cả trình duyệt và máy chủ dùng parser chung `js/pricing.js`, có hỗ trợ các tên biến thể và giá unlimited/1st-edition.
+- TCGCSV chỉ được gọi từ backend và lưu vào `price_feed_cache` tối đa một lần mỗi 24 giờ cho mỗi tài nguyên. Đọc `last-updated.txt` trước khi tải lại; nếu build không đổi thì giữ dữ liệu. Ngày trên giá là ngày dữ liệu nguồn, không phải thời điểm người dùng bấm nút. Cache cũ tối đa 7 ngày chỉ dùng khi nguồn lỗi và giữ nguyên ngày gốc.
+- Nếu một nguồn tạm mất, app giữ giá cũ của nguồn đó và giá nhập tay ở nguồn khác. Không phụ thuộc file giá cố định cho từng lá trong `prices/`. Không dùng giá tiếng Anh để định giá lá tiếng Nhật: kiểm tra lại đúng mã set của ngôn ngữ đó.
+- **eBay** không có trong nguồn giá tự động đang bật (`js/config.js`). Nguồn “Khác” chỉ nhập tay.
 - Giá quy đổi về VND bằng tỷ giá ước tính trong `js/config.js` (`EUR_VND`, `USD_VND`, `JPY_VND`) rồi nhân hệ số condition (`CONDITION_FACTOR`: New Mint 1.0 / A 0.9 / B 0.75 / C 0.55 / D 0.35). Đây là giá **tham khảo ước tính**, không phải giá chốt.
 - Nhập giá tay được (nguồn "Khác") và lưu cùng các nguồn tự động trong `cards.price_sources`.
+
+### Triển khai và kiểm tra phần giá
+
+1. Chạy `supabase/price-feed-cache.sql` một lần. Bảng bật RLS, thu hồi quyền `anon`/`authenticated`; chỉ backend `service_role` được đọc/ghi. Không lưu dữ liệu kho vào cache.
+2. Deploy Edge Function `price-proxy`, giữ **Verify JWT bật**, bao gồm `supabase/functions/price-proxy/index.ts` và dependency `js/pricing.js`. `SUPABASE_URL` và `SUPABASE_SERVICE_ROLE_KEY` lấy từ biến môi trường mặc định của Edge Functions; không đưa service key vào frontend.
+3. Publish các file frontend cùng nhau, gồm `js/pricing.js` trước `js/store.js` như `index.html`.
+4. Chạy `node --test tests/pricing.test.mjs` (Node 24+). CI tự chạy các kiểm thử này khi phần giá thay đổi.
+5. Kiểm tra đường dự phòng bằng `GET /functions/v1/price-proxy?set=sv08&number=226&missing=tcgplayer` với headers xác thực hiện có. Kết quả thành công chứa `sources` với `via: "tcgcsv"`, `product_id` và `updated_at`; lần gọi kế tiếp đọc cache, không tải lại bộ giá. Nếu feed không có lá đó, app vẫn hiển thị nguồn lấy được và giữ giá đã lưu.
 
 ## FIFO — logic cốt lõi
 

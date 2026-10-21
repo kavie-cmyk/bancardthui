@@ -555,6 +555,8 @@
       }
       var upd = r.updated_at ? BCT.fmtDate(String(r.updated_at).slice(0, 10)) : '—';
       var kind = r.kind === 'manual' ? 'nhập tay' : BCT.esc(r.kind || '');
+      var saved = (c.priceSources || []).filter(function (s) { return s.source === r.source; })[0];
+      if (saved && saved.via === 'tcgcsv') kind += ' · qua TCGCSV';
       return '<div class="mkt-src"><b>' + BCT.esc(label) + '</b> ' + BCT.fmtPrice(r.price, r.currency) +
         (kind ? ' <span class="hint">(' + kind + ')</span>' : '') +
         '<div class="hint">= ' + BCT.fmtVND(r.vnd) + ' → <b>Cond ' + BCT.esc(condName) + ': ' + BCT.fmtVND(r.vndCond) + '</b> · cập nhật ' + upd + '</div></div>';
@@ -1599,15 +1601,15 @@
           mktMsg('Đang kéo giá các nguồn…');
           withLoading(async function () {
             try {
-              var srcs = await BCT.fetchMarketPrices(c.setId, c.number);
-              if (!srcs) { mktMsg('Chưa có giá cho lá này trên TCGdex. Bạn vẫn có thể nhập tay bên dưới.' + priceDiagSuffix()); return; }
+              var srcs = await BCT.fetchMarketPrices(c.setId, c.number, c);
+              if (!srcs) { mktMsg('Chưa lấy được giá tự động cho đúng lá và ngôn ngữ này. Giá đã lưu được giữ lại; bạn có thể nhập tay bên dưới.' + priceDiagSuffix()); return; }
               await BCT.saveMarketPrices(S, cid, srcs);
               toast('Đã cập nhật giá ' + srcs.length + ' nguồn: ' + srcs.map(function (s) { return BCT.sourceLabel(s.source); }).join(' + '));
               render();
               // render() vẽ lại #mkt-msg nên phải hiện dòng chẩn đoán SAU render.
               if (srcs.length < 2) {
                 var mel = $('mkt-msg');
-                if (mel) mel.textContent = 'Vẫn thiếu nguồn giá — chụp màn hình dòng này gửi Miso nhé.' + priceDiagSuffix();
+                if (mel) mel.textContent = 'Lần này chưa lấy được đủ hai nguồn. Giá cũ của nguồn còn thiếu được giữ nguyên cùng ngày cập nhật.' + priceDiagSuffix();
               }
             } catch (err) {
               mktMsg('Lỗi kéo giá: ' + (err.message || err));

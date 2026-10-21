@@ -990,33 +990,8 @@
     return map[c] != null ? map[c] : 1;
   }
 
-  // Parse thuần túy: pricing object (TCGdex) → [{source,price,currency,kind,updated_at}]
   function parsePricingSources(pricing) {
-    var out = [];
-    if (!pricing) return out;
-    var cm = pricing.cardmarket;
-    if (cm) {
-      var p = firstNonNull(cm.trend, cm.avg);
-      if (p != null) out.push({
-        source: 'cardmarket', price: Number(p), currency: 'EUR',
-        kind: cm.trend != null ? 'trend' : 'avg',
-        updated_at: cm.updated || cm.updatedAt || null
-      });
-    }
-    var tp = pricing.tcgplayer || pricing.tcgPlayer;
-    if (tp) {
-      var tpp = firstNonNull(
-        tp.holofoil && tp.holofoil.marketPrice,
-        tp.normal && tp.normal.marketPrice,
-        tp['reverse-holofoil'] && tp['reverse-holofoil'].marketPrice
-      );
-      if (tpp != null) out.push({
-        source: 'tcgplayer', price: Number(tpp), currency: 'USD',
-        kind: 'market',
-        updated_at: tp.updated || tp.updatedAt || null
-      });
-    }
-    return out;
+    return root.BCTPricing.fromTcgdex(pricing);
   }
 
   // fetch có timeout (tránh treo khi proxy/mạng đứng)
@@ -1035,7 +1010,7 @@
       return res;
     }, function (err) {
       clearTimeout(timer);
-      if (err && err.name === 'AbortError') throw new Error('TCGdex API timeout (quá 15s).');
+      if (err && err.name === 'AbortError') throw new Error('Nguồn giá timeout (quá ' + Math.ceil(ms / 1000) + 's).');
       throw err;
     });
   }
@@ -1051,203 +1026,78 @@
   // Kết quả chẩn đoán của lần kéo giá gần nhất (xem BCT.getLastPriceDiag).
   var lastPriceDiag = null;
 
-  // ===== Kéo giá thị trường — BẢN LÀM LẠI TỪ ĐẦU (2026-10-21) =====
-  // Zac yêu cầu bỏ kiểu vá chồng vá cũ, làm lại gọn: MỘT luồng tuyến tính,
-  // thử lần lượt từng bước, bước nào cho đủ 2 nguồn (Cardmarket +
-  // TCGplayer) thì dừng ngay:
-  //   1) TCGdex trực tiếp — nguồn chính. Hỏi lần lượt 3 bản sao phân phối
-  //      (/en → /fr → /de): cùng dữ liệu gốc nhưng là các bản sao khác
-  //      nhau, có bản bị trống mục TCGplayer theo từng lá/từng lúc (đã gặp
-  //      với sv08-226: phía Zac + Supabase trúng bản trống, bản khác đủ).
-  //   2) pokemontcg.io trực tiếp — nguồn ĐỘC LẬP với TCGdex, dùng MÃ SET
-  //      RIÊNG của họ (sv8 thay vì sv08 — xem ioSetIdCandidates).
-  //   3) Bản giá dự phòng lưu sẵn trên chính site (prices/<set>-<số>.json):
-  //      được lấy từ một mạng khác hẳn cho những lá kẹt cứng ở các đường
-  //      trực tiếp — app đọc ngay trên tên miền của mình nên không phụ
-  //      thuộc bản sao phân phối nào của TCGdex cả.
-  //   4) price-proxy: máy chủ Supabase đi lấy TCGdex hộ — 1 lần gọi.
-  //   5) Chờ 3 giây, gọi lại price-proxy lần cuối (nuốt khoảnh khắc
-  //      TCGdex trả tcgplayer = NULL theo đợt cập nhật dữ liệu).
-  // Mỗi bước chỉ lấp nguồn còn thiếu, không ghi đè nguồn đã có. Chẩn đoán
-  // là 1 dòng ngắn cho mỗi bước đã chạy (BCT.getLastPriceDiag).
-  function priceSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-
-  // Một lần gọi TCGdex ở MỘT bản ngôn ngữ. localId của TCGdex KHÔNG đệm
-  // số 0 ("swsh7-49" chứ không "swsh7-049") trong khi app lưu số có đệm
-  // ("049") → thử bản không đệm trước, 404 mới thử bản gốc. Số lẫn chữ
-  // (promo "SWSH230") giữ nguyên. Trả {entries, note} — không ném lỗi.
-  async function tcgdexLocaleFetch(locale, setId, number) {
-    var raw = String(number).trim();
-    var nums = [];
-    var n = parseCardNumber(raw);
-    if (/^\d+$/.test(raw) && n != null && String(n) !== raw) nums.push(String(n));
-    nums.push(raw);
+  // One canonical locale per card. Locale changes are not independent feeds.
+  // Try the backend immediately after a partial response; it has a separate
+  // TCGplayer feed and a durable daily cache, instead of a per-card JSON patch.
+  async function fetchTcgdexPricing(setId, number, card) {
+    var language = card && card.language || 'en';
+    if (['en', 'jp', 'ja'].indexOf(language) < 0) {
+      lastPriceDiag = { card: String(setId) + '-' + String(number), tries: ['Ngôn ngữ này chưa có nguồn giá tự động; vui lòng nhập tay.'] };
+      return [];
+    }
+    var locale = language === 'jp' || language === 'ja' ? 'ja' : 'en';
+    var bySource = [];
+    var tries = [];
+    var nums = root.BCTPricing.numberCandidates(number);
     for (var i = 0; i < nums.length; i++) {
-      var url = 'https://api.tcgdex.net/v2/' + locale + '/cards/' +
-        encodeURIComponent(String(setId).trim()) + '-' +
-        encodeURIComponent(nums[i]) + '?cb=' + Date.now();
       try {
-        var res = await fetchWithTimeout(url, { cache: 'no-store' }, 15000);
+        var url = 'https://api.tcgdex.net/v2/' + locale + '/cards/' +
+          encodeURIComponent(String(setId).trim()) + '-' + encodeURIComponent(nums[i]);
+        var res = await fetchWithTimeout(url, { cache: 'no-store' }, 6000);
         if (res.status === 404) continue;
-        if (!res.ok) return { entries: [], note: 'HTTP ' + res.status };
+        if (!res.ok) { tries.push('TCGdex HTTP ' + res.status); break; }
         var j = await res.json();
-        var entries = parsePricingSources(j.pricing);
-        var hasTp = entries.some(function (e) { return e.source === 'tcgplayer'; });
-        return { entries: entries, note: 'HTTP 200, TCGplayer: ' + (hasTp ? 'có' : 'TRỐNG') };
-      } catch (e) {
-        if (i === nums.length - 1) return { entries: [], note: 'lỗi mạng' };
-      }
+        bySource = parsePricingSources(j.pricing);
+        tries.push('TCGdex /' + locale + ': ' + bySource.length + ' nguồn');
+        break;
+      } catch (e) { tries.push('TCGdex: ' + (e.message || e)); break; }
     }
-    return { entries: [], note: 'HTTP 404' };
+    function complete() {
+      return bySource.some(function (s) { return s.source === 'cardmarket'; }) &&
+        bySource.some(function (s) { return s.source === 'tcgplayer'; });
+    }
+    if (!complete() && locale === 'en' && language === 'en') {
+      var missing = bySource.some(function (s) { return s.source === 'tcgplayer'; }) ? '' : 'tcgplayer';
+      var proxy = await fetchPriceProxy(setId, number, missing);
+      // Keep prices already obtained on the browser's route.
+      bySource = root.BCTPricing.mergeSources(proxy.entries, bySource);
+      tries.push('Máy chủ: ' + proxy.note);
+    }
+    if (language !== 'en') tries.push('Không dùng giá bản tiếng Anh cho lá ' + language + '.');
+    lastPriceDiag = { card: String(setId).trim() + '-' + String(number).trim(), tries: tries };
+    return bySource;
   }
 
-  // Bước 1 của luồng kéo giá: hỏi TCGdex lần lượt ở các bản sao /en, /fr,
-  // /de — gộp phần còn thiếu giữa các bản, có đủ TCGplayer thì dừng sớm.
-  async function tcgdexDirectOnce(setId, number) {
-    var locales = ['en', 'fr', 'de'];
-    var merged = {};
-    var notes = [];
-    for (var li = 0; li < locales.length; li++) {
-      var r = await tcgdexLocaleFetch(locales[li], setId, number);
-      notes.push('/' + locales[li] + ' ' + r.note);
-      (r.entries || []).forEach(function (e) {
-        if (e && e.source && !merged[e.source]) merged[e.source] = e;
-      });
-      if (merged.tcgplayer) break;
-    }
-    return {
-      entries: Object.keys(merged).map(function (k) { return merged[k]; }),
-      note: notes.join(' · ')
-    };
-  }
-
-  async function fetchTcgdexPricing(setId, number) {
-    var raw = String(number).trim();
-    var diagTries = [];
-    var bySource = {};
-    function absorb(entries) {
-      (entries || []).forEach(function (e) {
-        if (e && e.source && !bySource[e.source]) bySource[e.source] = e;
-      });
-    }
-    function count() { return Object.keys(bySource).length; }
-    function finish() {
-      lastPriceDiag = { card: String(setId).trim() + '-' + raw, tries: diagTries.slice() };
-      return Object.keys(bySource).map(function (k) { return bySource[k]; });
-    }
-
-    var s1 = await tcgdexDirectOnce(setId, raw);
-    absorb(s1.entries);
-    diagTries.push('1) TCGdex trực tiếp: ' + s1.note);
-    if (count() >= 2) return finish();
-
-    var ioEntries = [];
-    try { ioEntries = await fetchPokemonTcgIoPricing(setId, raw); } catch (e) { ioEntries = []; }
-    absorb(ioEntries);
-    diagTries.push('2) pokemontcg.io: ' + (lastIoDiag || 'không rõ') + ' → ' + count() + ' nguồn');
-    if (count() >= 2) return finish();
-
-    // Bước 3: bản giá dự phòng lưu sẵn ngay trên site (prices/<set>-<số>.json
-    // trong repo — được lấy từ một mạng khác hẳn cho những lá kẹt cứng ở
-    // các đường trực tiếp; file không có thì 404, bỏ qua êm).
-    try {
-      var fres = await fetchWithTimeout('prices/' + encodeURIComponent(String(setId).trim()) + '-' +
-        encodeURIComponent(raw) + '.json?cb=' + Date.now(), { cache: 'no-store' }, 8000);
-      if (fres.ok) {
-        var fj = await fres.json();
-        absorb(fj && fj.sources);
-        diagTries.push('3) bản giá lưu sẵn: có (lấy ' + String((fj && fj.fetched_at) || '?').slice(0, 10) + ') → ' + count() + ' nguồn');
-      } else {
-        diagTries.push('3) bản giá lưu sẵn: không có');
-      }
-    } catch (e) {
-      diagTries.push('3) bản giá lưu sẵn: lỗi ' + (e.message || e));
-    }
-    if (count() >= 2) return finish();
-
-    for (var px = 0; px < 2 && count() < 2; px++) {
-      if (px > 0) await priceSleep(3000);
-      var sp = await fetchPriceProxy(setId, raw);
-      absorb(sp.entries);
-      diagTries.push((px === 0 ? '4' : '5') + ') qua Supabase: ' + sp.note + ' → ' + count() + ' nguồn');
-    }
-    return finish();
-  }
-
-  // Nguồn lấp chỗ trống: pokemontcg.io (API độc lập với TCGdex, có cả giá
-  // Cardmarket lẫn TCGplayer). Đã gặp trường hợp phía trình duyệt của Zac
-  // TCGdex chỉ trả Cardmarket mà thiếu TCGplayer → nguồn nào thiếu thì lấy
-  // từ đây. Không cần API key ở mức dùng của shop.
-  var lastIoDiag = null;
-  // pokemontcg.io dùng MÃ SET KHÁC TCGdex ở nhiều set đời mới (kiểm chứng
-  // từ dữ liệu gốc của chính họ): TCGdex đệm 0 (sv08) còn io thì không
-  // (sv8); set lẻ ,5 thì đời SV io viết pt5 (sv08.5 → sv8pt5), đời SWSH bỏ
-  // dấu chấm (swsh4.5 → swsh45). Trước đây app dùng thẳng mã TCGdex nên
-  // mọi set SV đều bị io trả 404 — đường lấp coi như chết. Nay sinh các
-  // mã ứng viên và thử lần lượt, trúng mã nào dùng mã đó.
-  function ioSetIdCandidates(setId) {
-    var s = String(setId || '').trim();
-    var out = [];
-    var m = /^([a-z]+?)(\d+)(?:\.(\d+))?$/.exec(s);
-    if (m) {
-      var base = m[1] + String(parseInt(m[2], 10));
-      if (m[3]) { out.push(base + 'pt' + m[3]); out.push(base + m[3]); }
-      else out.push(base);
-    }
-    if (out.indexOf(s) < 0) out.push(s);
-    return out;
-  }
+  // Legacy independent API retained as a callable fallback. The backend handles
+  // set aliases too; HTTP 4xx/5xx do not erase a successful TCGdex result.
   async function fetchPokemonTcgIoPricing(setId, number) {
-    var raw = String(number).trim();
-    var candidates = [];
-    var n = parseCardNumber(raw);
-    if (/^\d+$/.test(raw) && n != null && String(n) !== raw) candidates.push(String(n));
-    candidates.push(raw);
-    var setIds = ioSetIdCandidates(setId);
-    for (var si = 0; si < setIds.length; si++) {
-    for (var c = 0; c < candidates.length; c++) {
-      var url = 'https://api.pokemontcg.io/v2/cards/' +
-        encodeURIComponent(setIds[si]) + '-' +
-        encodeURIComponent(candidates[c]);
-      try {
-        var res = await fetchWithTimeout(url, { cache: 'no-store' }, 20000);
-        if (res.status === 404) { lastIoDiag = 'HTTP 404 (đã thử mã set: ' + setIds.join(', ') + ')'; continue; }
-        if (!res.ok) { lastIoDiag = 'HTTP ' + res.status; return []; }
-        var j = await res.json();
-        var d = j && j.data;
-        if (!d) { lastIoDiag = 'HTTP 200 nhưng không có data'; return []; }
-        lastIoDiag = 'HTTP 200 (mã set ' + setIds[si] + '), cm:' + (d.cardmarket ? 'có' : 'không') + ', tp:' + (d.tcgplayer ? 'có' : 'KHÔNG');
-        var out = [];
-        var cm = d.cardmarket && d.cardmarket.prices;
-        if (cm) {
-          var cmp = cm.trendPrice != null ? cm.trendPrice : cm.averageSellPrice;
-          if (cmp != null) out.push({ source: 'cardmarket', price: cmp, currency: 'EUR', kind: cm.trendPrice != null ? 'trend' : 'avg', updated_at: isoDateStr(d.cardmarket.updatedAt) });
-        }
-        var tp = d.tcgplayer && d.tcgplayer.prices;
-        if (tp) {
-          var tpp = (tp.holofoil && tp.holofoil.market != null) ? tp.holofoil.market
-            : (tp.normal && tp.normal.market != null) ? tp.normal.market
-            : (tp.reverseHolofoil ? tp.reverseHolofoil.market : null);
-          if (tpp != null) out.push({ source: 'tcgplayer', price: tpp, currency: 'USD', kind: 'market', updated_at: isoDateStr(d.tcgplayer.updatedAt) });
-        }
-        return out;
-      } catch (e) { lastIoDiag = 'lỗi: ' + (e.message || e); return []; }
-    }
+    var sets = root.BCTPricing.ioSetIds(setId);
+    var nums = root.BCTPricing.numberCandidates(number);
+    for (var si = 0; si < sets.length; si++) {
+      for (var ni = 0; ni < nums.length; ni++) {
+        try {
+          var res = await fetchWithTimeout('https://api.pokemontcg.io/v2/cards/' +
+            encodeURIComponent(sets[si]) + '-' + encodeURIComponent(nums[ni]), {}, 6000);
+          if (res.status === 404) continue;
+          if (!res.ok) return [];
+          var body = await res.json();
+          return root.BCTPricing.fromIo(body.data);
+        } catch (e) { return []; }
+      }
     }
     return [];
   }
 
-  function isoDateStr(s) { return s ? String(s).replace(/\//g, '-') : null; }
-
   // Gọi Edge Function price-proxy (xem supabase/functions/price-proxy).
   // Trả {entries, note} — note để ghi vào dòng chẩn đoán; lỗi gì cũng không
   // ném ra ngoài (app còn các đường trực tiếp để lùi).
-  async function fetchPriceProxy(setId, number) {
+  async function fetchPriceProxy(setId, number, missing) {
     try {
       if (!root.SUPABASE_URL || !root.SUPABASE_ANON_KEY) return { entries: [], note: 'thiếu cấu hình Supabase' };
       var url = root.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/price-proxy' +
         '?set=' + encodeURIComponent(String(setId).trim()) +
-        '&number=' + encodeURIComponent(String(number).trim());
+        '&number=' + encodeURIComponent(String(number).trim()) +
+        (missing ? '&missing=' + encodeURIComponent(missing) : '');
       var token = null;
       try { token = root.BCTAuth && root.BCTAuth.accessToken ? root.BCTAuth.accessToken() : null; } catch (e) { token = null; }
       var res = await fetchWithTimeout(url, {
@@ -1261,7 +1111,7 @@
       if (!res.ok) return { entries: [], note: 'HTTP ' + res.status };
       var j = await res.json();
       var srcs = (j && j.sources) || [];
-      var ok = srcs.filter(function (e) { return e && e.source && e.price != null; });
+      var ok = srcs.filter(function (e) { return e && e.source && root.BCTPricing.positive(e.price) != null; });
       return { entries: ok, note: 'HTTP 200, ' + ok.length + ' nguồn' + (j && j.diag ? ' [' + j.diag + ']' : '') };
     } catch (e) {
       return { entries: [], note: 'lỗi: ' + (e.message || e) };
@@ -1364,8 +1214,10 @@
   // market_source = nguồn của giá đó. Không hiển thị như "giá chính thức".
   // Ghi tolerantly: nếu cột nào chưa migrate → tự bỏ qua cột đó.
   async function saveMarketPrices(state, cardId, sources) {
-    var srcs = sources || [];
     var card = getCard(state, cardId);
+    // A temporarily missing feed must not delete its previously saved quote,
+    // or a manually entered price from another source.
+    var srcs = root.BCTPricing.mergeSources(card && card.priceSources, sources);
     var rows = marketSourceRows({ priceSources: srcs, condition: card ? card.condition : 'A' }) || [];
     var top = null, i;
     for (i = 0; i < rows.length; i++) {
