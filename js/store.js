@@ -1003,7 +1003,7 @@
         updated_at: cm.updated || cm.updatedAt || null
       });
     }
-    var tp = pricing.tcgplayer;
+    var tp = pricing.tcgplayer || pricing.tcgPlayer;
     if (tp) {
       var tpp = firstNonNull(
         tp.holofoil && tp.holofoil.marketPrice,
@@ -1059,23 +1059,32 @@
     if (/^\d+$/.test(raw) && n != null && String(n) !== raw) candidates.push(String(n));
     candidates.push(raw);
     var lastErr = null;
+    var best = null;
     for (var c = 0; c < candidates.length; c++) {
-      var url = 'https://api.tcgdex.net/v2/en/cards/' +
-        encodeURIComponent(String(setId).trim()) + '-' +
-        encodeURIComponent(candidates[c]);
       for (var i = 0; i < 3; i++) {
+        // URL kèm mã ngẫu nhiên mỗi lần gọi + cache:'no-store' để né mọi lớp
+        // cache (trình duyệt/CDN) — đã gặp trường hợp cache trả bản thiếu TCGplayer.
+        var url = 'https://api.tcgdex.net/v2/en/cards/' +
+          encodeURIComponent(String(setId).trim()) + '-' +
+          encodeURIComponent(candidates[c]) + '?cb=' + Date.now() + '_' + i;
         try {
-          var res = await fetchWithTimeout(url, null, 15000);
+          var res = await fetchWithTimeout(url, { cache: 'no-store' }, 15000);
           if (res.status === 404) break; // thử dạng số kế tiếp
           if (!res.ok) throw new Error('TCGdex API lỗi HTTP ' + res.status);
           var j = await res.json();
-          return parsePricingSources(j.pricing);
+          var out = parsePricingSources(j.pricing);
+          if (!best || out.length > best.length) best = out;
+          if (out.length >= 2) return out;
+          // Mới được <2 nguồn: gọi lại lần nữa bằng URL mới trước khi chấp nhận.
+          if (i < 2) await new Promise(function (r) { setTimeout(r, 600); });
         } catch (err) {
           lastErr = err;
           if (i < 2) await new Promise(function (r) { setTimeout(r, 800 * (i + 1)); });
         }
       }
+      if (best && best.length) return best;
     }
+    if (best) return best;
     if (lastErr) throw lastErr;
     return [];
   }
