@@ -59,6 +59,7 @@ html.theme-rs .rs-nav-icon { display: block; width: 28px; height: 28px; object-f
 html.theme-rs .nav a:hover { background: #e3edf0; }
 html.theme-rs .nav a.active { position: relative; color: #fffdf0; background: var(--rs-ruby); box-shadow: inset 0 3px #e85c66, inset 0 -3px #8e2440; }
 html.theme-rs .nav a.active::before { content: ''; width: 0; height: 0; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 7px solid #fff9e8; margin-right: 2px; }
+html.theme-rs .topbar [hidden] { display: none; }
 html.theme-rs .topbar .btn-ghost { color: #294867; border: 1px solid #9ca6a6; border-radius: 0; padding: 4px 9px; font: 19px var(--font-display); }
 html.theme-rs .topbar .btn-ghost:hover { background: #e4eadf; }
 html.theme-rs .seed-pill { font: 16px var(--font-display); background: #f4e8ad; color: #705528; border: 1px solid #ad9250; border-radius: 0; letter-spacing: 0; }
@@ -200,29 +201,29 @@ html.theme-rs .rs-filter-drawer input, html.theme-rs .rs-filter-drawer select { 
 .rs-pagination > div { display: flex; gap: 6px; }
 .rs-card-preview { min-width: 0; background: #fbf5df; border: 2px solid #28547c; }
 .rs-preview-title { margin: 0; padding: 9px 10px; display: flex; align-items: center; gap: 6px; background: #1c5696; color: #fff5e1; box-shadow: inset 0 2px #81b4d3; font: 25px/1.1 var(--font-display); }
-.rs-preview-content { padding: 14px 14px 12px; }
-.rs-preview-card { padding: 4px; background: #e5dfc9; border: 1px solid #c8c5ad; max-width: 158px; margin: 0 auto 9px; }
-.rs-preview-image { display: block; width: 100%; height: 209px; object-fit: contain; }
-.rs-preview-content h3 { font: 31px/1.05 var(--font-display); margin: 8px 0 2px; text-align: center; overflow-wrap: anywhere; }
-.rs-preview-set { text-align: center; color: #516d7c; font-size: 18px; }
-.rs-card-facts { margin: 12px 0; font-size: 19px; }
-.rs-card-facts > div { display: grid; grid-template-columns: 83px 1fr; gap: 6px; border-bottom: 1px solid #e1dcc8; padding: 3px 0; }
-.rs-card-facts dt { color: #5a6e7d; }
+.rs-preview-content { padding: 14px 12px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; align-items: start; }
+.rs-preview-card { grid-column: 1; grid-row: 1 / 4; width: 100%; padding: 3px; background: #e5dfc9; border: 1px solid #c8c5ad; max-width: 158px; margin: 0 auto 9px; }
+.rs-preview-image { display: block; width: 100%; height: 190px; object-fit: contain; }
+.rs-preview-content h3 { grid-column: 2; font: 29px/1.05 var(--font-display); margin: 8px 0 2px; text-align: left; overflow-wrap: anywhere; }
+.rs-preview-set { grid-column: 2; text-align: left; color: #516d7c; font-size: 18px; }
+.rs-card-facts { grid-column: 2; margin: 10px 0 0; font-size: 19px; }
+.rs-card-facts > div { display: block; border-bottom: 1px solid #e1dcc8; padding: 3px 0; }
+.rs-card-facts dt { font-size: 16px; color: #5a6e7d; }
 .rs-card-facts dd { margin: 0; overflow-wrap: anywhere; }
-.rs-preview-prices { border: 2px solid #3d6687; padding: 8px 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f7f3e6; margin: 10px 0 12px; }
+.rs-preview-prices { grid-column: 1 / -1; border: 2px solid #3d6687; padding: 8px 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f7f3e6; margin: 10px 0 12px; }
 .rs-preview-prices > div + div { border-left: 1px solid #aeb8b2; padding-left: 10px; }
 .rs-preview-prices span { display: block; font-size: 20px; }
 .rs-preview-prices strong { display: block; font-size: 28px; font-weight: 400; line-height: 1.2; }
 .rs-preview-prices small { display: block; font-size: 15px; color: #526d7b; line-height: 1.25; margin-top: 4px; }
-html.theme-rs .rs-fetch-prices { width: 100%; background: #1665a7; box-shadow: inset 0 2px #68beec, inset 0 -3px #124875, 2px 3px #132d4b; font-size: 22px; }
-.rs-fetch-message { margin: 8px 0; font-size: 17px; color: #385a6e; min-height: 0; }
+html.theme-rs .rs-fetch-prices { grid-column: 1 / -1; width: 100%; background: #1665a7; box-shadow: inset 0 2px #68beec, inset 0 -3px #124875, 2px 3px #132d4b; font-size: 22px; }
+.rs-fetch-message { grid-column: 1 / -1; margin: 8px 0; font-size: 17px; color: #385a6e; min-height: 0; }
 .rs-fetch-message:empty { display: none; }
-.rs-preview-actions { margin-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.rs-preview-actions { grid-column: 1 / -1; margin-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 html.theme-rs .rs-preview-actions .btn { font-size: 20px; padding: 7px 4px; gap: 4px; }
 .rs-empty { padding: 24px 12px; text-align: center; color: #3c5b70; }
 .rs-empty h2 { font: 30px var(--font-display); margin: 5px 0; }
 .rs-empty p { margin: 8px 0 18px; font-size: 21px; }
-html.theme-rs .rs-game-footer { display: flex; align-items: center; gap: 14px; position: fixed; bottom: 16px; right: max(22px, calc((100vw - 1300px) / 2)); padding: 0 16px 0 5px; border: 2px solid #142d50; box-shadow: 3px 3px #142d50; background: #fff9e8; color: #2f526f; z-index: 20; font-size: 21px; }
+html.theme-rs .rs-game-footer { display: flex; align-items: center; gap: 14px; position: relative; width: fit-content; margin: -68px 4% 24px auto; padding: 0 16px 0 5px; border: 2px solid #142d50; box-shadow: 3px 3px #142d50; background: #fff9e8; color: #2f526f; z-index: 20; font-size: 21px; }
 .rs-game-footer a { color: #21496c; text-decoration: none; border-left: 1px solid #b6bfad; padding-left: 12px; }
 .rs-game-footer kbd { border: 1px solid #77909e; padding: 0 5px; background: #edf0df; font: inherit; }
 
@@ -248,6 +249,7 @@ html.theme-rs .rs-game-footer { display: flex; align-items: center; gap: 14px; p
   .rs-preview-content h3, .rs-preview-set { grid-column: 2; text-align: left; }
   .rs-preview-content > :not(.rs-preview-card) { grid-column: 2; }
   .rs-card-facts { margin: 8px 0; }
+  .rs-card-facts > div { display: grid; grid-template-columns: 83px 1fr; }
   .rs-preview-image { height: 206px; }
   .rs-inventory-table td { font-size: 21px; }
   .rs-row-name { font-size: 23px; }
@@ -323,7 +325,7 @@ html.theme-rs .rs-game-footer { display: flex; align-items: center; gap: 14px; p
   .rs-card-facts { font-size: 18px; }
   .rs-card-facts > div { grid-template-columns: 70px 1fr; }
   .rs-preview-content > .rs-preview-prices, .rs-preview-content > .rs-fetch-prices, .rs-preview-content > .rs-fetch-message, .rs-preview-content > .rs-preview-actions { grid-column: 1 / -1; }
-  html.theme-rs .rs-game-footer { right: 10px; left: auto; bottom: 10px; gap: 9px; padding-right: 10px; font-size: 20px; }
+  html.theme-rs .rs-game-footer { margin: -56px 12px 18px auto; gap: 9px; padding-right: 10px; font-size: 20px; }
   .rs-game-footer > span { display: none; }
   .rs-game-footer img { width: 38px; height: 38px; }
   html.theme-rs .toast { max-width: none; font-size: 21px; }
