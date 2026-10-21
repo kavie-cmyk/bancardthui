@@ -1057,6 +1057,8 @@
     for (var k in pricing) if (Object.prototype.hasOwnProperty.call(pricing, k)) keys.push(k);
     var s = 'pricing:[' + keys.join(',') + ']';
     var tp = pricing.tcgplayer || pricing.tcgPlayer;
+    if (('tcgplayer' in pricing || 'tcgPlayer' in pricing) && tp == null) s += ' tcgplayer=NULL';
+    else if (tp && typeof tp !== 'object') s += ' tcgplayer=' + typeof tp;
     if (tp && typeof tp === 'object') {
       var tk = [];
       for (var k2 in tp) {
@@ -1120,7 +1122,7 @@
     var result = best || [];
     if (result.length < 2) {
       result = await fillMissingSources(result, setId, number);
-      diagTries.push('lấp chỗ trống pokemontcg.io → tổng ' + result.length + ' nguồn');
+      diagTries.push('lấp pokemontcg.io: ' + (lastIoDiag || '?') + ' → tổng ' + result.length + ' nguồn');
     }
     saveDiag();
     if (result.length) return result;
@@ -1132,6 +1134,7 @@
   // Cardmarket lẫn TCGplayer). Đã gặp trường hợp phía trình duyệt của Zac
   // TCGdex chỉ trả Cardmarket mà thiếu TCGplayer → nguồn nào thiếu thì lấy
   // từ đây. Không cần API key ở mức dùng của shop.
+  var lastIoDiag = null;
   async function fetchPokemonTcgIoPricing(setId, number) {
     var raw = String(number).trim();
     var candidates = [];
@@ -1143,12 +1146,18 @@
         encodeURIComponent(String(setId).trim()) + '-' +
         encodeURIComponent(candidates[c]);
       try {
-        var res = await fetchWithTimeout(url, { cache: 'no-store' }, 15000);
-        if (res.status === 404) continue;
-        if (!res.ok) return [];
+        // pokemontcg.io khá chậm → timeout 30s và thử lại 1 lần khi lỗi mạng.
+        var res = null;
+        for (var a = 0; a < 2; a++) {
+          try { res = await fetchWithTimeout(url, { cache: 'no-store' }, 30000); break; }
+          catch (e1) { if (a === 1) throw e1; await new Promise(function (r) { setTimeout(r, 800); }); }
+        }
+        if (res.status === 404) { lastIoDiag = 'HTTP 404'; continue; }
+        if (!res.ok) { lastIoDiag = 'HTTP ' + res.status; return []; }
         var j = await res.json();
         var d = j && j.data;
-        if (!d) return [];
+        if (!d) { lastIoDiag = 'HTTP 200 nhưng không có data'; return []; }
+        lastIoDiag = 'HTTP 200, cm:' + (d.cardmarket ? 'có' : 'không') + ', tp:' + (d.tcgplayer ? 'có' : 'KHÔNG');
         var out = [];
         var cm = d.cardmarket && d.cardmarket.prices;
         if (cm) {
@@ -1163,7 +1172,7 @@
           if (tpp != null) out.push({ source: 'tcgplayer', price: tpp, currency: 'USD', kind: 'market', updated_at: isoDateStr(d.tcgplayer.updatedAt) });
         }
         return out;
-      } catch (e) { return []; }
+      } catch (e) { lastIoDiag = 'lỗi: ' + (e.message || e); return []; }
     }
     return [];
   }
