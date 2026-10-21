@@ -1091,6 +1091,23 @@
   /* ================= VIEW: NHẬP KHO ================= */
   var pendingImages = [];
 
+  // Ô chọn set (input + datalist) mặc định chỉ hiện set khớp chữ đang gõ, muốn
+  // xem tất cả phải xóa trắng tay. Hàm này gắn cho mọi ô set: khi bấm vào, ô tự
+  // tạm xóa trắng để hiện đủ danh sách; rời ô mà không chọn/gõ gì thì khôi phục.
+  function makeSetPickerBrowseable(input) {
+    if (!input || input._browseable) return;
+    input._browseable = true;
+    var saved = '';
+    input.addEventListener('focus', function () {
+      saved = input.value;
+      if (saved) input.value = '';
+    });
+    input.addEventListener('change', function () { saved = input.value; });
+    input.addEventListener('blur', function () {
+      if (!input.value) input.value = saved;
+    });
+  }
+
   function setDatalistOptions() {
     var out = '';
     (S.customSets || []).forEach(function (s) {
@@ -1324,6 +1341,7 @@
   }
 
   function bindScanForm() {
+    makeSetPickerBrowseable($('s-setname'));
     var form = $('f-scan');
     if (!form) return;
     form.addEventListener('submit', function (e) {
@@ -1482,6 +1500,7 @@
   function $(id) { return document.getElementById(id); }
 
   function bind(base, r) {
+    Array.prototype.forEach.call(document.querySelectorAll('input[list="set-list"]'), makeSetPickerBrowseable);
     if (base === 'kho' && !r.segs[1] && $('f-q')) {
       var rerender = function () { $('card-grid').innerHTML = khoCards(); };
       $('f-q').addEventListener('input', function (e) { khoFilter.q = e.target.value; rerender(); });
