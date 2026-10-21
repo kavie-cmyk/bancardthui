@@ -78,12 +78,19 @@
   // Phiên bản in của từng lô (finish)
   var VARIANTS = ['Normal', 'Reverse Holo', 'Holo', '1st Edition'];
 
-  // Mẫu holo chi tiết (dân sưu tầm) — nullable, mặc định không ghi nhận
-  // Suggestions only; holo_pattern remains free text for new or uncommon treatments.
-  var HOLO_PATTERNS = ['Galaxy', 'Cosmos', 'Cosmos Swirl', 'Poké Ball', 'Master Ball',
-    'Mirror', 'Cracked Ice', 'Confetti', 'Crosshatch', 'Disco', 'Sequin', 'Sheen',
-    'Tinsel', 'Pixel', 'Mosaic', 'Silver', 'Smooth', 'Water Web', 'Energy',
-    'Checkerboard', 'Dot Grid', 'Textured', 'Khác'];
+  // Mẫu holo chi tiết (dân sưu tầm) — nullable, mặc định không ghi nhận.
+  // Danh sách đóng cho dropdown chọn (Zac yêu cầu 2026-10-21), tổng hợp từ
+  // hướng dẫn nhận diện holo (folio.fyi) + Bulbapedia: 7 mẫu chuẩn theo
+  // thời kỳ (Starlight 1999 → Cosmos → Tinsel → Sheen → Water Web → Line
+  // → Mirage của Scarlet & Violet), các mẫu theo sản phẩm (Cracked Ice,
+  // Crosshatch, Sequin, Confetti), mẫu bóng cho reverse (Poké Ball,
+  // Master Ball — bản Nhật có từ 2023), Mirror (cách gọi bản Nhật của
+  // reverse), và các tên thị trường/grader thường dùng (Galaxy, Disco...).
+  var HOLO_PATTERNS = ['Starlight', 'Cosmos', 'Cosmos Swirl', 'Galaxy', 'Tinsel',
+    'Sheen', 'Water Web', 'Line', 'Mirage', 'Cracked Ice', 'Crosshatch',
+    'Sequin', 'Confetti', 'Poké Ball', 'Master Ball', 'Mirror', 'Disco',
+    'Mosaic', 'Checkerboard', 'Dot Grid', 'Energy', 'Textured', 'Smooth',
+    'Silver', 'Plain Foil', 'Khác'];
 
   // TCGdex CDN dùng 'ja' cho tiếng Nhật (không phải 'jp')
   var CDN_LANG = { en: 'en', jp: 'ja', other: 'en' };

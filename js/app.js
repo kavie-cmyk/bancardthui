@@ -1301,14 +1301,18 @@
       ' (tổng ' + s.total + ' lá).';
   }
 
+  // Dropdown chọn mẫu holo (Zac yêu cầu đổi từ ô gõ + gợi ý datalist —
+  // trên điện thoại datalist gần như không hiện — sang select chọn hẳn).
+  // Vẫn giữ lại các mẫu lạ đã có trong kho để không mất dữ liệu cũ.
   function holoInput(id, value) {
     var patterns = BCT.HOLO_PATTERNS.slice();
     (S.lots || []).forEach(function (l) {
       if (l.holoPattern && patterns.indexOf(l.holoPattern) < 0) patterns.push(l.holoPattern);
     });
-    return '<input id="' + id + '" list="' + id + '-options" value="' + BCT.esc(value || '') + '" placeholder="Chọn hoặc gõ mẫu holo…" autocomplete="off">' +
-      '<datalist id="' + id + '-options">' + patterns.map(function (h) { return '<option value="' + BCT.esc(h) + '">'; }).join('') + '</datalist>' +
-      '<div class="hint">Chọn mẫu gợi ý hoặc nhập tên riêng. Để trống nếu chưa xác định.</div>';
+    if (value && patterns.indexOf(value) < 0) patterns.push(value);
+    return '<select id="' + id + '"><option value="">— Chưa xác định —</option>' +
+      patterns.map(function (h) { return '<option value="' + BCT.esc(h) + '"' + (value === h ? ' selected' : '') + '>' + BCT.esc(h) + '</option>'; }).join('') +
+      '</select><div class="hint">Chọn đúng mẫu holo của lá — để trống nếu chưa xác định.</div>';
   }
 
   function vNhap(q) {
@@ -1479,7 +1483,12 @@
     var condOpts = BCT.CONDITIONS.map(function (cd) { return '<option' + (cd === 'New Mint' ? ' selected' : '') + '>' + BCT.esc(cd) + '</option>'; }).join('');
     var today = new Date(); var pad = function (n) { return (n < 10 ? '0' : '') + n; };
     var todayStr = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
-    var html = '<div class="scan-found"><div class="scan-thumb">' + cardImgTag(tmpCard, res.name) + '</div><div>' +
+    // Chưa khớp được set (hay gặp ở lá Nhật): hiện luôn ẢNH CHỤP trong màn
+    // xác nhận thay vì ảnh chính thức không tải nổi, để user đối chiếu mắt.
+    var thumb = (!matched && scanState.photo)
+      ? '<img src="' + scanState.photo + '" alt="Ảnh chụp lá bài">'
+      : cardImgTag(tmpCard, res.name);
+    var html = '<div class="scan-found"><div class="scan-thumb">' + thumb + '</div><div>' +
       '<div class="scan-name">' + BCT.esc(res.name) + '</div>' +
       '<div class="scan-meta">' + BCT.esc([res.setName, (res.releaseName && res.releaseName !== res.setName) ? res.releaseName : '', res.number ? 'số ' + res.number : '', res.year].filter(Boolean).join(' · ')) + '</div>' +
       (matched ? '<div class="scan-meta">Khớp set trong dữ liệu: <b>' + BCT.esc(matched.name) + '</b> — kiểm tra lại số và biến thể trước khi lưu.</div>'
