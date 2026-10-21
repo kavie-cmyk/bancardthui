@@ -126,6 +126,46 @@
     return true;
   }
 
+  // Đăng nhập bằng email + mật khẩu (tài khoản do admin tạo sẵn trong Supabase
+  // Dashboard, đã auto-confirm → không gửi email, không vướng rate limit email).
+  async function loginWithPassword(email, password) {
+    email = String(email || '').trim();
+    password = String(password || '');
+    if (!email || !password) throw new Error('Nhập cả email và mật khẩu.');
+    var res = await fetch(base() + '/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: { 'apikey': key(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password })
+    });
+    if (!res.ok) {
+      var rawMsg = '';
+      try {
+        var j = await res.json();
+        if (j) rawMsg = String(j.msg || j.message || j.error_description || j.error || '');
+      } catch (e) {}
+      if (/invalid login credentials/i.test(rawMsg)) {
+        throw new Error('Email hoặc mật khẩu chưa đúng. Lưu ý: tài khoản phải được tạo trước trong Supabase (Authentication → Users) với đúng email này và có đặt mật khẩu.');
+      }
+      if (/email not confirmed/i.test(rawMsg)) {
+        throw new Error('Tài khoản này chưa được xác nhận email nên chưa đăng nhập bằng mật khẩu được. Vào Supabase → Authentication → Users, tạo lại tài khoản và tick "Auto Confirm User".');
+      }
+      if (res.status === 429 || /rate limit/i.test(rawMsg)) {
+        throw new Error('Supabase đang tạm giới hạn đăng nhập. Đợi ít phút rồi thử lại.');
+      }
+      throw new Error('Đăng nhập không được.' + (rawMsg ? ' (' + rawMsg + ')' : ' (HTTP ' + res.status + ')'));
+    }
+    var data = await res.json();
+    if (!data || !data.access_token) throw new Error('Supabase không trả về phiên đăng nhập.');
+    var expiresIn = parseInt(data.expires_in, 10);
+    if (!(expiresIn > 0)) expiresIn = 3600;
+    saveSession({
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: Date.now() + expiresIn * 1000
+    });
+    return true;
+  }
+
   // Refresh access token 1 lần. Trả về true nếu có session mới, false nếu không refresh được.
   async function refresh() {
     var s = loadSession();
@@ -161,6 +201,7 @@
     accessToken: accessToken,
     parseSessionFromHash: parseSessionFromHash,
     requestMagicLink: requestMagicLink,
+    loginWithPassword: loginWithPassword,
     refresh: refresh
   };
 

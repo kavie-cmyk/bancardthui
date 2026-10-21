@@ -49,9 +49,14 @@
           '    <label for="login-email">Email</label>' +
           '    <input type="email" id="login-email" placeholder="email của Bự" autocomplete="email" required>' +
           '  </div>' +
+          '  <div class="field">' +
+          '    <label for="login-pass">Mật khẩu</label>' +
+          '    <input type="password" id="login-pass" placeholder="Mật khẩu đã đặt trong Supabase" autocomplete="current-password">' +
+          '  </div>' +
           '  <div class="form-err" id="login-err" hidden></div>' +
-          '  <div class="form-actions"><button type="submit" class="btn" id="login-btn">Gửi link đăng nhập</button></div>' +
-          '  <p class="panel-note">Không cần mật khẩu — link đăng nhập gửi qua email, bấm vào là vào.</p>' +
+          '  <div class="form-actions"><button type="submit" class="btn" id="login-btn">Đăng nhập</button>' +
+          '  <button type="button" class="btn secondary" id="login-magic-btn">Gửi link qua email</button></div>' +
+          '  <p class="panel-note">Đăng nhập bằng mật khẩu là nhanh nhất (không cần chờ email). Nút gửi link là đường dự phòng khi quên mật khẩu.</p>' +
           '</form>') +
       '  </div>' +
       '</div>';
@@ -59,16 +64,29 @@
       var form = document.getElementById('login-form');
       var err = document.getElementById('login-err');
       var btn = document.getElementById('login-btn');
+      var magicBtn = document.getElementById('login-magic-btn');
       form.onsubmit = function (ev) {
         ev.preventDefault();
         err.hidden = true;
         var email = document.getElementById('login-email').value.trim();
-        btn.disabled = true; btn.textContent = 'Đang gửi…';
+        var pass = document.getElementById('login-pass').value;
+        btn.disabled = true; btn.textContent = 'Đang đăng nhập…';
+        window.BCTAuth.loginWithPassword(email, pass).then(function () {
+          location.reload();
+        }).catch(function (e) {
+          err.textContent = e.message; err.hidden = false;
+          btn.disabled = false; btn.textContent = 'Đăng nhập';
+        });
+      };
+      magicBtn.onclick = function () {
+        err.hidden = true;
+        var email = document.getElementById('login-email').value.trim();
+        magicBtn.disabled = true; magicBtn.textContent = 'Đang gửi…';
         window.BCTAuth.requestMagicLink(email).then(function () {
           renderLogin(true);
         }).catch(function (e) {
           err.textContent = e.message; err.hidden = false;
-          btn.disabled = false; btn.textContent = 'Gửi link đăng nhập';
+          magicBtn.disabled = false; magicBtn.textContent = 'Gửi link qua email';
         });
       };
       document.getElementById('login-email').focus();
