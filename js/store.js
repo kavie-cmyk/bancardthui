@@ -1235,10 +1235,13 @@
       };
       if (!graded.org) graded = null;
     }
+    var num = s(card.number);
+    if (/^\d+$/.test(num)) num = num.padStart(3, '0'); // TCGdex dùng localId có số 0 đầu ("049")
     return {
       name: s(card.name),
-      number: s(card.number),
+      number: num,
       setName: s(card.setName || card.releaseName),
+      releaseName: s(card.releaseName),
       setCode: '',
       series: s(card.releaseName),
       year: s(card.year),

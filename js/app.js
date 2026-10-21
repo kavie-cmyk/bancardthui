@@ -1285,7 +1285,10 @@
   }
 
   function scanConfirmHTML(res) {
-    var matched = lookupSetByName(res.setName || '');
+    // CardSight đôi khi trả setName là nhãn phụ (vd "Checklist") còn tên set thật
+    // nằm ở releaseName — thử khớp cả hai, lấy cái nào khớp được dữ liệu TCGdex.
+    var matched = lookupSetByName(res.setName || '') || (res.releaseName ? lookupSetByName(res.releaseName) : null);
+    var setShown = matched ? matched.name : (res.setName || res.releaseName || '');
     var tmpCard = { setId: matched ? matched.id : '', number: res.number || '', name: res.name || '', images: [] };
     var variantOpts = BCT.VARIANTS.map(function (v) {
       var sel = res.foil && v === 'Holo' ? ' selected' : (!res.foil && v === 'Normal' ? ' selected' : '');
@@ -1297,15 +1300,15 @@
     var todayStr = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
     var html = '<div class="scan-found"><div class="scan-thumb">' + cardImgTag(tmpCard, res.name) + '</div><div>' +
       '<div class="scan-name">' + BCT.esc(res.name) + '</div>' +
-      '<div class="scan-meta">' + BCT.esc([res.setName, res.number ? 'số ' + res.number : '', res.year, res.series].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="scan-meta">' + BCT.esc([res.setName, (res.releaseName && res.releaseName !== res.setName) ? res.releaseName : '', res.number ? 'số ' + res.number : '', res.year].filter(Boolean).join(' · ')) + '</div>' +
       (matched ? '<div class="scan-meta">Khớp set trong dữ liệu: <b>' + BCT.esc(matched.name) + '</b> — ảnh chính thức sẽ tự hiển thị.</div>'
-               : '<div class="scan-meta warn">Chưa khớp được set "' + BCT.esc(res.setName || '?') + '" với dữ liệu TCGdex — kiểm tra lại tên set ở form dưới, hoặc lá này sẽ dùng ảnh chụp làm ảnh chính.</div>') +
+               : '<div class="scan-meta warn">Chưa khớp được set "' + BCT.esc(setShown || '?') + '" với dữ liệu TCGdex — kiểm tra lại tên set ở form dưới, hoặc lá này sẽ dùng ảnh chụp làm ảnh chính.</div>') +
       (res.confidence ? '<div class="scan-meta">Độ tin cậy của AI: <b>' + BCT.esc(res.confidence) + '</b>' + (res.alternatives ? ' · có ' + res.alternatives + ' phương án khác — nếu thấy sai, sửa thẳng ở form dưới' : '') + (res.parallel ? ' · Biến thể gợi ý: ' + BCT.esc(res.parallel) : '') + '</div>' : '') +
       (res.graded ? '<div class="scan-meta">Lá đang trong slab: <b>' + BCT.esc(res.graded.org) + ' ' + BCT.esc(res.graded.score) + '</b>' + (res.graded.cert ? ' · cert ' + BCT.esc(res.graded.cert) : '') + ' — thông tin này sẽ tự lưu kèm card.</div>' : '') +
       '</div></div>';
     html += '<form id="f-scan"><div class="form-grid">' +
       fld('Tên lá *', '<input id="s-name" required value="' + BCT.esc(res.name) + '">') +
-      fld('Set (gõ để chọn)', '<input id="s-setname" list="set-list" value="' + BCT.esc(matched ? matched.name : (res.setName || '')) + '" placeholder="Tên set"><datalist id="set-list">' + setDatalistOptions() + '</datalist>') +
+      fld('Set (gõ để chọn)', '<input id="s-setname" list="set-list" value="' + BCT.esc(setShown) + '" placeholder="Tên set"><datalist id="set-list">' + setDatalistOptions() + '</datalist>') +
       fld('Số thứ tự', '<input id="s-number" value="' + BCT.esc(res.number || '') + '" placeholder="vd 025/165">') +
       fld('Ngôn ngữ', '<select id="s-lang"><option value="en"' + (res.language === 'en' ? ' selected' : '') + '>Tiếng Anh</option><option value="jp"' + (res.language === 'jp' ? ' selected' : '') + '>Tiếng Nhật</option><option value="other"' + (res.language === 'other' ? ' selected' : '') + '>Khác</option></select>') +
       fld('Độ hiếm', '<select id="s-rarity">' + rarOpts + '</select>') +
