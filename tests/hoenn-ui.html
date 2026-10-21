@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="vi" class="theme-rs">
+<head>
+<base href="../">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hoenn UI fixture — dữ liệu minh họa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=20261021-hoenn1">
+<link rel="stylesheet" href="css/theme-rs.css?v=20261021-hoenn1">
+<script>try { if (localStorage.getItem('bct_theme') === 'rs') document.documentElement.classList.add('theme-rs'); } catch (e) {}</script>
+</head>
+<body>
+<div id="grain"></div>
+<div class="rs-world" aria-hidden="true"><img class="rs-kyogre" src="assets/hoenn/kyogre.png" alt="" width="144" height="144" loading="lazy"><img class="rs-mudkip" src="assets/hoenn/mudkip.png" alt="" width="96" height="96" loading="lazy"></div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/dashboard">
+      <span class="brand-mark" id="brand-icon"></span>
+      <span class="brand-name">Bán Card <em>Thui</em></span>
+    </a>
+    <nav class="nav" id="nav"></nav>
+    <button class="ball-toggle" id="btn-theme" type="button" title="Đổi giao diện: Pokémon Ruby/Sapphire" aria-label="Đổi giao diện Ruby Sapphire"><span></span></button>
+    <span class="seed-pill" id="seed-pill" hidden>Dữ liệu mẫu</span>
+    <button class="btn-ghost" id="btn-seed-toggle" hidden></button>
+    <button class="btn-ghost" id="btn-export" title="Tải backup JSON toàn bộ dữ liệu">Xuất JSON</button>
+    <button class="btn-ghost" id="btn-logout" title="Đăng xuất">Đăng xuất</button>
+  </div>
+</header>
+
+<main class="wrap" id="app"></main>
+<footer class="rs-game-footer"><img src="assets/hoenn/mudkip.png" alt="" width="48" height="48" loading="lazy"><span>Dữ liệu minh họa</span><a href="#/kho">Kho thẻ</a><a href="#/nhap"><kbd>＋</kbd> Nhập kho</a></footer>
+<div class="toast" id="toast"></div>
+<div class="loading" id="loading" hidden><div class="spinner"></div><div>Đang tải…</div></div>
+
+<script>
+// Isolated UI test fixture. Only synthetic data; never connect to Supabase.
+if (!location.hash) location.hash = '#/kho';
+window.BCTAuth = { parseSessionFromHash: function(){}, isLoggedIn: function(){return true}, accessToken: function(){return null}, clearSession: function(){} };
+var demoPrices = function(cm,tp) { return [{source:'cardmarket',price:cm,currency:'EUR',kind:'trend',updated_at:'2026-10-20'}, {source:'tcgplayer',price:tp,currency:'USD',kind:'market',updated_at:'2026-10-20'}]; };
+var demoCards = [
+ {id:'demo-1',name:'Tatsugiri ex',set:'Surging Sparks',set_id:'sv08',number:'226',rarity:'Ultra Rare',language:'en',condition:'A',storage_location:'Binder 1 · Trang 3',price_sources:demoPrices(1.79,1.57)},
+ {id:'demo-2',name:'Pikachu',set:'Evolving Skies',set_id:'swsh7',number:'049',rarity:'Common',language:'en',condition:'A',storage_location:'Binder 1 · Trang 1',price_sources:demoPrices(.13,.34)},
+ {id:'demo-3',name:'Charizard ex',set:'151',set_id:'sv03.5',number:'006',rarity:'Double Rare',language:'en',condition:'New Mint',storage_location:'Binder 2 · Trang 2',price_sources:demoPrices(7.20,8.22)},
+ {id:'demo-4',name:'Umbreon VMAX',set:'Evolving Skies',set_id:'swsh7',number:'215',rarity:'Special Illustration Rare',language:'en',condition:'A',storage_location:'Binder 2 · Trang 4',price_sources:[]},
+ {id:'demo-5',name:'Eevee',set:'SWSH Promo',set_id:'swshp',number:'SWSH230',rarity:'Promo',language:'en',condition:'B',price_sources:demoPrices(.68,.74)},
+ {id:'demo-6',name:'Lugia V',set:'Silver Tempest',set_id:'swsh12',number:'138',rarity:'Ultra Rare',language:'en',condition:'A',price_sources:demoPrices(4.20,5.10)},
+ {id:'demo-7',name:'Rayquaza VMAX',set:'Evolving Skies',set_id:'swsh7',number:'111',rarity:'Ultra Rare',language:'en',condition:'A',price_sources:demoPrices(2.20,2.54)}
+];
+var demoLots = demoCards.map(function(c,i) {return {id:'lot-'+i,card_id:c.id,qty:12-i,qty_remaining:10-i,cost_per_unit:20000*(i+1),import_date:'2026-10-01',variant:'Normal',condition:'A'};});
+var demoOrders = [{id:'order-1',date:'2026-10-18',channel:'facebook',buyer:'Khách minh họa',fees:10000,shipping_fee:15000,items:[{card_id:'demo-2',lot_id:'lot-1',qty:2,sell_price:50000,cost_per_unit:40000}],note:'Đơn minh họa cho kiểm tra giao diện'}];
+window.SB = {
+ q: async function(table) { return table==='cards'?demoCards:table==='inventory_lots'?demoLots:table==='orders'?demoOrders:[]; },
+ upd: async function(table,patch,where) { if(table==='cards') {var c=demoCards.find(function(c){return c.id===where.id}); if(c)Object.assign(c,patch);}return [patch]; },
+ ins: async function(){throw new Error('Trang minh họa không ghi dữ liệu.');},
+ del: async function(){throw new Error('Trang minh họa không xóa dữ liệu.');}
+};
+window.__fixtureRequests = [];
+var fixtureFetch = window.fetch.bind(window);
+window.fetch = async function(url,opts) {
+ window.__fixtureRequests.push(String(url));
+ if (String(url).includes('api.tcgdex.net/v2/')) return new Response(JSON.stringify({pricing:{cardmarket:{trend:1.79,updated:'2026-10-20'},tcgplayer:{holofoil:{marketPrice:1.57},updated:'2026-10-20'}}}),{status:200,headers:{'Content-Type':'application/json'}});
+ if(String(url).includes('supabase')) throw new Error('Fixture cannot access backend');
+ return fixtureFetch(url,opts);
+};
+</script>
+<script src="js/sets-db.js?v=20261021-hoenn1"></script>
+<script src="js/pricing.js?v=20261021-hoenn1"></script>
+<script src="js/store.js?v=20261021-hoenn1"></script>
+<script src="js/app.js?v=20261021-hoenn1"></script>
+<script>
+document.getElementById('btn-theme').setAttribute('aria-pressed', String(document.documentElement.classList.contains('theme-rs')));
+document.getElementById('btn-theme').addEventListener('click', function () {
+  var on = document.documentElement.classList.toggle('theme-rs');
+  try { localStorage.setItem('bct_theme', on ? 'rs' : 'vault'); } catch (e) {}
+  this.setAttribute('aria-pressed', String(on));
+  window.dispatchEvent(new Event('bct:themechange'));
+});
+</script>
+</body>
+</html>

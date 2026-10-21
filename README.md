@@ -153,3 +153,14 @@ supabase/schema.sql   Toàn bộ schema (bảng, index, ghi chú Storage bucket 
 3. **eBay pricing** khi có App ID (xem mục Giá tham khảo).
 4. Kiểm tra Redirect URL của Supabase Auth khớp mọi domain/localhost đang dùng,
    nếu không magic link sẽ lỗi khi đăng nhập từ địa chỉ mới.
+
+## Giao diện Hoenn (nút Poké Ball)
+
+Bấm Poké Ball để bật/tắt giao diện Ruby/Sapphire; lựa chọn lưu trong trình duyệt.
+Giao diện Hoenn có nền pixel riêng, sprite từ bản GBA và màn hình kho dạng bảng
+với khung xem nhanh, phân trang, bộ lọc và kéo giá. Chuyển theme không đổi dữ liệu
+kho, nguồn giá hay cách tính vốn. Ảnh nền và nguồn sprite ở `assets/hoenn/README.md`.
+
+`tests/hoenn-ui.html` là fixture giao diện với dữ liệu giả trong bộ nhớ, không
+kết nối Supabase. Dùng để kiểm tra desktop/mobile, chuyển theme, bộ lọc, phân
+trang, chọn thẻ và cập nhật giá mà không ghi vào kho thật.

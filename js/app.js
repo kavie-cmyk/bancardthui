@@ -231,9 +231,10 @@
         };
       }
     }
-    document.getElementById('nav').innerHTML = NAV.map(function (n) {
+    var rsIcons = ['town-map', 'pokeblock-case', 'card-key', 'poke-ball', 'exp-share', 'amulet-coin', 'exp-share', 'harbor-mail'];
+    document.getElementById('nav').innerHTML = NAV.map(function (n, i) {
       var on = active === n.path || (n.path !== '#/dashboard' && active.indexOf(n.path) === 0 && active !== '#/dashboard');
-      return '<a href="' + n.path + '" class="' + (on ? 'active' : '') + '">' + n.icon + n.label + '</a>';
+      return '<a href="' + n.path + '" class="' + (on ? 'active' : '') + '">' + '<img class="rs-nav-icon" src="assets/hoenn/' + rsIcons[i] + '.png" alt="" width="32" height="32" loading="lazy">' + n.icon + n.label + '</a>';
     }).join('');
     document.getElementById('brand-icon').innerHTML = IC.card;
     var pill = document.getElementById('seed-pill');
@@ -295,6 +296,9 @@
     bind(base, r);
   }
   window.addEventListener('hashchange', render);
+  window.addEventListener('bct:themechange', function () {
+    if (S) render();
+  });
 
   /* ================= VIEW: DASHBOARD ================= */
   function vDashboard() {
@@ -431,6 +435,10 @@
   }
 
   /* ================= VIEW: KHO ================= */
+  function isHoenn() { return document.documentElement.classList.contains('theme-rs'); }
+  var rsSelectedCardId = null;
+  var rsPage = 0;
+  var RS_PAGE_SIZE = 5;
   var khoFilter = { q: '', set: '', rarity: '', sort: 'name', lang: 'all', holo: '', loc: '', misprintOnly: false, gradedOnly: false };
 
   function langChip(label, val) {
@@ -451,6 +459,8 @@
       if (l.qtyRemaining > 0 && l.holoPattern && holos.indexOf(l.holoPattern) < 0) holos.push(l.holoPattern);
     });
     sets.sort(); rarities.sort();
+
+    if (isHoenn()) return vHoennKho(sets, rarities, holos);
 
     var html = '<h1 class="page-title">Kho card <button class="icon-btn" id="rarity-help" title="Ký hiệu độ hiếm">' + IC.help + '</button></h1>' +
       '<div class="popover" id="rarity-pop" hidden>' + rarityLegendHTML() + '</div>' +
@@ -477,7 +487,7 @@
     return html;
   }
 
-  function khoCards() {
+  function filteredKhoCards() {
     var q = khoFilter.q.toLowerCase();
     var list = S.cards.filter(function (c) {
       if (khoFilter.set && c.set !== khoFilter.set) return false;
@@ -500,6 +510,11 @@
       if (khoFilter.sort === 'capital') return (BCT.stockOf(S, b.id) * BCT.avgCostOf(S, b.id)) - (BCT.stockOf(S, a.id) * BCT.avgCostOf(S, a.id));
       return a.name.localeCompare(b.name);
     });
+    return list;
+  }
+
+  function khoCards() {
+    var list = filteredKhoCards();
     if (!list.length) return '<div class="empty" style="grid-column:1/-1"><h3>Không tìm thấy card nào</h3><p>Thử đổi từ khóa hoặc bộ lọc.</p></div>';
     return list.map(function (c) {
       var st = BCT.stockOf(S, c.id);
@@ -525,6 +540,127 @@
         '<div class="pcard-stats"><span>Vốn TB <b>' + BCT.fmtVND(avg) + '</b></span><span>Ôm <b>' + BCT.fmtVND(st * avg) + '</b></span></div>' +
         '</div></a>';
     }).join('');
+  }
+
+  /* Hoenn theme: a PC-storage workspace. The original grid stays in vault mode. */
+  function rsOptions(items, selected) {
+    return items.map(function (value) {
+      return '<option value="' + BCT.esc(value) + '"' + (value === selected ? ' selected' : '') + '>' + BCT.esc(value) + '</option>';
+    }).join('');
+  }
+  function vHoennKho(sets, rarities, holos) {
+    var t = BCT.totals(S);
+    var html = '<section class="rs-storage"><div class="rs-storage-title">' +
+      '<div><img src="assets/hoenn/pokeblock-case.png" alt="" width="40" height="40"><h1>KHO THẺ</h1></div>' +
+      '<a class="btn" href="#/nhap">' + IC.plus + ' Nhập thẻ</a></div>' +
+      '<div class="rs-storage-body"><div class="rs-storage-list">' +
+      '<div class="rs-inventory-count"><span><img src="assets/hoenn/poke-ball.png" alt="" width="28" height="28"> <b>' + t.stock + '</b> lá trong kho</span>' +
+      '<span><img src="assets/hoenn/card-key.png" alt="" width="28" height="28"> <b>' + sets.length + '</b> bộ sưu tập</span></div>' +
+      '<div class="toolbar rs-primary-filters"><label class="rs-search"><span>' + '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg>' + '</span>' +
+      '<input type="search" id="f-q" aria-label="Tìm thẻ trong kho" placeholder="Tìm tên thẻ hoặc mã số…" value="' + BCT.esc(khoFilter.q) + '"></label>' +
+      '<select id="f-set" aria-label="Bộ bài"><option value="">Tất cả bộ</option>' + rsOptions(sets, khoFilter.set) + '</select>' +
+      '<select id="f-sort" aria-label="Sắp xếp"><option value="name"' + (khoFilter.sort === 'name' ? ' selected' : '') + '>Tên A–Z</option>' +
+      '<option value="stock"' + (khoFilter.sort === 'stock' ? ' selected' : '') + '>Tồn kho ↓</option>' +
+      '<option value="capital"' + (khoFilter.sort === 'capital' ? ' selected' : '') + '>Vốn trong kho ↓</option></select></div>' +
+      '<details class="rs-filter-drawer"' + (khoFilter.rarity || khoFilter.holo || khoFilter.loc ? ' open' : '') + '><summary>Bộ lọc chi tiết</summary>' +
+      '<div class="toolbar"><select id="f-rarity" aria-label="Độ hiếm"><option value="">Tất cả độ hiếm</option>' + rsOptions(rarities, khoFilter.rarity) + '</select>' +
+      '<select id="f-holo" aria-label="Mẫu holo"><option value="">Tất cả mẫu holo</option>' + rsOptions(holos, khoFilter.holo) + '</select>' +
+      '<input type="search" id="f-loc" aria-label="Vị trí lưu trữ" placeholder="Vị trí lưu trữ…" value="' + BCT.esc(khoFilter.loc) + '"></div></details>' +
+      '<div class="chip-row" id="lang-chips">' + langChip('Tất cả', 'all') + langChip('EN', 'en') + langChip('JP', 'jp') + langChip('Khác', 'other') +
+      toggleChip('Lỗi in', khoFilter.misprintOnly, 'misprint') + toggleChip('Đã graded', khoFilter.gradedOnly, 'graded') + '</div>' +
+      '<div id="card-grid" class="rs-table-region">' + hoennKhoRows() + '</div></div>' +
+      '<aside id="rs-card-preview" class="rs-card-preview" aria-label="Thông tin thẻ đang chọn">' + hoennCardPreview() + '</aside></div></section>';
+    return html;
+  }
+  function hoennKhoRows() {
+    var list = filteredKhoCards();
+    var pages = Math.max(1, Math.ceil(list.length / RS_PAGE_SIZE));
+    rsPage = Math.max(0, Math.min(rsPage, pages - 1));
+    var visible = list.slice(rsPage * RS_PAGE_SIZE, (rsPage + 1) * RS_PAGE_SIZE);
+    if (!visible.some(function (c) { return c.id === rsSelectedCardId; })) rsSelectedCardId = visible.length ? visible[0].id : null;
+    if (!list.length) return '<div class="rs-empty"><img src="assets/hoenn/treecko.png" alt="" width="96" height="96"><h2>' + (S.cards.length ? 'Không tìm thấy thẻ' : 'Kho đang trống') + '</h2><p>' + (S.cards.length ? 'Thử đổi từ khóa hoặc bộ lọc.' : 'Nhập lá bài đầu tiên để bắt đầu bộ sưu tập.') + '</p><a class="btn secondary" href="#/nhap">Nhập thẻ</a></div>';
+    var html = '<table class="rs-inventory-table"><thead><tr><th scope="col">Lá bài</th><th scope="col">Bộ / số</th><th scope="col">Tồn</th><th scope="col">Giá tham khảo</th></tr></thead><tbody>';
+    visible.forEach(function (c) {
+      var rows = BCT.marketSourceRows(c) || [];
+      html += '<tr class="' + (c.id === rsSelectedCardId ? 'rs-row-selected' : '') + '"><td><button type="button" class="rs-card-select" data-rs-card="' + BCT.esc(c.id) + '" aria-pressed="' + (c.id === rsSelectedCardId) + '">' +
+        '<span class="rs-row-cursor" aria-hidden="true">▶</span>' + cardImgTag(c, 'low', 'rs-card-thumb', c.name) +
+        '<span class="rs-row-name">' + BCT.esc(c.name) + '<small>' + BCT.esc(c.rarity || BCT.LANGUAGES[c.language] || 'English') + '</small></span></button></td>' +
+        '<td><span>' + BCT.esc(c.set || 'Chưa phân bộ') + '</span><small class="rs-card-number">' + BCT.esc(c.number || '—') + '</small></td>' +
+        '<td class="rs-stock">' + BCT.stockOf(S, c.id) + '</td><td class="rs-row-prices">';
+      ['cardmarket', 'tcgplayer'].forEach(function (source) {
+        var row = rows.filter(function (r) { return r.source === source; })[0];
+        html += '<div><span>' + BCT.sourceLabel(source) + '</span><b>' + (row ? BCT.fmtPrice(row.price, row.currency) : '—') + '</b></div>';
+      });
+      html += '</td></tr>';
+    });
+    html += '</tbody></table><div class="rs-pagination"><span>' + (rsPage * RS_PAGE_SIZE + 1) + '–' + Math.min((rsPage + 1) * RS_PAGE_SIZE, list.length) + ' / ' + list.length + ' loại thẻ</span>' +
+      '<div><button class="icon-btn" type="button" data-rs-page="-1" aria-label="Trang trước"' + (rsPage === 0 ? ' disabled' : '') + '>◀</button>' +
+      '<button class="icon-btn" type="button" data-rs-page="1" aria-label="Trang sau"' + (rsPage + 1 >= pages ? ' disabled' : '') + '>▶</button></div></div>';
+    return html;
+  }
+  function hoennCardPreview() {
+    var c = BCT.getCard(S, rsSelectedCardId);
+    var html = '<h2 class="rs-preview-title"><img src="assets/hoenn/poke-ball.png" alt="" width="28" height="28"> THÔNG TIN THẺ</h2>';
+    if (!c) return html + '<div class="rs-empty"><img src="assets/hoenn/mudkip.png" alt="" width="96" height="96"><p>Chọn một lá bài trong kho.</p></div>';
+    var rows = BCT.marketSourceRows(c) || [];
+    html += '<div class="rs-preview-content"><div class="rs-preview-card">' + cardImgTag(c, 'high', 'rs-preview-image', c.name) + '</div>' +
+      '<h3>' + BCT.esc(c.name) + '</h3><div class="rs-preview-set">' + BCT.esc(c.set || 'Chưa phân bộ') + ' · ' + BCT.esc(c.number || '—') + '</div>' +
+      '<dl class="rs-card-facts"><div><dt>Ngôn ngữ</dt><dd>' + BCT.esc(BCT.LANGUAGES[c.language] || 'English') + '</dd></div>' +
+      '<div><dt>Tình trạng</dt><dd>' + BCT.esc(BCT.condLabel(c.condition)) + '</dd></div>' +
+      '<div><dt>Vị trí</dt><dd>' + BCT.esc(c.storageLocation || 'Chưa ghi vị trí') + '</dd></div></dl>' +
+      '<div class="rs-preview-prices">';
+    ['cardmarket', 'tcgplayer'].forEach(function (source) {
+      var row = rows.filter(function (r) { return r.source === source; })[0];
+      html += '<div><span>' + BCT.sourceLabel(source) + '</span><strong>' + (row ? BCT.fmtPrice(row.price, row.currency) : 'Chưa có giá') + '</strong>' +
+        '<small>' + (row ? BCT.fmtVND(row.vndCond) + ' · ' + (row.updated_at ? BCT.fmtDate(String(row.updated_at).slice(0, 10)) : 'Chưa rõ ngày') : 'Bấm kéo giá để cập nhật') + '</small></div>';
+    });
+    html += '</div><button class="btn rs-fetch-prices" id="rs-mkt-fetch" type="button">' + IC.coin + ' Kéo giá các nguồn</button>' +
+      '<p id="rs-mkt-msg" class="rs-fetch-message" role="status" aria-live="polite"></p>' +
+      '<div class="rs-preview-actions"><a class="btn secondary" href="#/kho/' + BCT.esc(c.id) + '">Xem chi tiết</a>' +
+      '<a class="btn secondary" href="#/kho/' + BCT.esc(c.id) + '/edit">' + IC.edit + ' Sửa thẻ</a></div></div>';
+    return html;
+  }
+  function refreshHoennInventory() {
+    if (!$('rs-card-preview') || !$('card-grid')) return;
+    $('card-grid').innerHTML = hoennKhoRows();
+    $('rs-card-preview').innerHTML = hoennCardPreview();
+  }
+  function bindHoennInventory() {
+    var grid = $('card-grid');
+    if (!grid || !$('rs-card-preview')) return;
+    grid.addEventListener('click', function (e) {
+      var target = e.target.closest('[data-rs-card], [data-rs-page]');
+      if (!target) return;
+      var movingPage = target.hasAttribute('data-rs-page');
+      var pageDirection = Number(target.getAttribute('data-rs-page'));
+      if (target.hasAttribute('data-rs-card')) rsSelectedCardId = target.getAttribute('data-rs-card');
+      else rsPage += Number(target.getAttribute('data-rs-page'));
+      var focusCard = rsSelectedCardId;
+      refreshHoennInventory();
+      var focusTarget = movingPage ? grid.querySelector('[data-rs-page="' + pageDirection + '"]') : grid.querySelector('[data-rs-card="' + CSS.escape(focusCard || '') + '"]');
+      if (focusTarget) focusTarget.focus({ preventScroll: true });
+    });
+    $('rs-card-preview').addEventListener('click', async function (e) {
+      if (!e.target.closest('#rs-mkt-fetch')) return;
+      var c = BCT.getCard(S, rsSelectedCardId);
+      if (!c) return;
+      var button = $('rs-mkt-fetch'), message = $('rs-mkt-msg');
+      button.disabled = true; button.textContent = 'Đang lấy giá…';
+      message.textContent = 'Đang kiểm tra các nguồn giá.';
+      try {
+        var sources = await BCT.fetchMarketPrices(c.setId, c.number, c);
+        if (!sources || !sources.length) throw new Error('Chưa lấy được giá cho lá này. Giá cũ được giữ nguyên.');
+        await BCT.saveMarketPrices(S, c.id, sources);
+        if ($('rs-card-preview')) {
+          refreshHoennInventory();
+          if (rsSelectedCardId === c.id) $('rs-mkt-msg').textContent = 'Đã cập nhật ' + sources.length + ' nguồn.' + (sources.length < 2 ? ' Nguồn còn thiếu giữ giá đã lưu.' : '');
+        }
+      } catch (err) {
+        if (document.contains(message)) message.textContent = err.message || 'Chưa lấy được giá. Thử lại sau.';
+      } finally {
+        if (document.contains(button)) { button.disabled = false; button.textContent = 'Kéo giá các nguồn'; }
+      }
+    });
   }
 
   /* ---------- giá tham khảo (đa nguồn pluggable + nhập tay) ---------- */
@@ -1561,7 +1697,8 @@
   function bind(base, r) {
     Array.prototype.forEach.call(document.querySelectorAll('input[list="set-list"]'), makeSetPickerBrowseable);
     if (base === 'kho' && !r.segs[1] && $('f-q')) {
-      var rerender = function () { $('card-grid').innerHTML = khoCards(); };
+      var rerender = function () { rsPage = 0; if (isHoenn()) refreshHoennInventory(); else $('card-grid').innerHTML = khoCards(); };
+      if (isHoenn()) bindHoennInventory();
       $('f-q').addEventListener('input', function (e) { khoFilter.q = e.target.value; rerender(); });
       $('f-set').addEventListener('change', function (e) { khoFilter.set = e.target.value; rerender(); });
       $('f-rarity').addEventListener('change', function (e) { khoFilter.rarity = e.target.value; rerender(); });
