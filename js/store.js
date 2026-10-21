@@ -1254,7 +1254,12 @@
     }
     var json = null;
     try { json = await res.json(); } catch (e) { /* giữ null */ }
-    if (res.status === 401 || res.status === 403) throw new Error('API token không đúng hoặc chưa được kích hoạt (HTTP ' + res.status + '). Kiểm tra lại token trong tài khoản Ximilar.');
+    var detailTxt = '';
+    if (json) {
+      var d = json.detail || json.message || json.error || (Array.isArray(json.non_field_errors) ? json.non_field_errors.join(' ') : '');
+      if (d) detailTxt = ' Ximilar báo: "' + String(d) + '"';
+    }
+    if (res.status === 401 || res.status === 403) throw new Error('API token bị Ximilar từ chối (HTTP ' + res.status + ').' + detailTxt + ' Thường do: chưa xác nhận email đăng ký, copy sai token, hoặc gói Free không có quyền gọi API nhận diện thẻ.');
     if (res.status === 402) throw new Error('Tài khoản Ximilar đã hết credits. Đợi tháng sau (gói free cấp lại) hoặc nâng gói.');
     if (res.status === 429) throw new Error('Ximilar giới hạn tốc độ gọi. Đợi một chút rồi thử lại.');
     if (!res.ok) throw new Error('Ximilar trả lỗi HTTP ' + res.status + (json && json.detail ? ': ' + json.detail : '') + '.');
