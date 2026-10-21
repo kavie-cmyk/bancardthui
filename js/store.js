@@ -1094,6 +1094,10 @@
     // khỏi chờ; thiếu nguồn thì phần lấp đã đi trước một đoạn — nhanh hơn
     // hẳn kiểu gọi tuần tự + thử lại nhiều vòng như trước.
     var ioPromise = fetchPokemonTcgIoPricing(setId, number).catch(function () { return []; });
+    // Đường dứt điểm: Edge Function price-proxy trên chính Supabase của shop
+    // (máy chủ đi lấy giá hộ — phía server TCGdex luôn trả đủ). Chưa triển
+    // khai thì nó trả 404 và app tự lùi về các đường trực tiếp như cũ.
+    var proxyPromise = fetchPriceProxy(setId, number);
     for (var c = 0; c < candidates.length; c++) {
       for (var i = 0; i < 2; i++) {
         // URL kèm mã ngẫu nhiên mỗi lần gọi + cache:'no-store' để né mọi lớp cache.
@@ -1128,6 +1132,13 @@
       result.forEach(function (e) { have[e.source] = true; });
       io.forEach(function (e) { if (!have[e.source]) { result.push(e); have[e.source] = true; } });
       diagTries.push('lấp pokemontcg.io: ' + (lastIoDiag || '?') + ' → tổng ' + result.length + ' nguồn');
+    }
+    if (result.length < 2) {
+      var px = await proxyPromise;
+      var have2 = {};
+      result.forEach(function (e) { have2[e.source] = true; });
+      px.entries.forEach(function (e) { if (!have2[e.source]) { result.push(e); have2[e.source] = true; } });
+      diagTries.push('qua Supabase (price-proxy): ' + px.note + ' → tổng ' + result.length + ' nguồn');
     }
     saveDiag();
     if (result.length) return result;
@@ -1178,6 +1189,35 @@
   }
 
   function isoDateStr(s) { return s ? String(s).replace(/\//g, '-') : null; }
+
+  // Gọi Edge Function price-proxy (xem supabase/functions/price-proxy).
+  // Trả {entries, note} — note để ghi vào dòng chẩn đoán; lỗi gì cũng không
+  // ném ra ngoài (app còn các đường trực tiếp để lùi).
+  async function fetchPriceProxy(setId, number) {
+    try {
+      if (!root.SUPABASE_URL || !root.SUPABASE_ANON_KEY) return { entries: [], note: 'thiếu cấu hình Supabase' };
+      var url = root.SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/price-proxy' +
+        '?set=' + encodeURIComponent(String(setId).trim()) +
+        '&number=' + encodeURIComponent(String(number).trim());
+      var token = null;
+      try { token = root.BCTAuth && root.BCTAuth.accessToken ? root.BCTAuth.accessToken() : null; } catch (e) { token = null; }
+      var res = await fetchWithTimeout(url, {
+        cache: 'no-store',
+        headers: {
+          'apikey': root.SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + (token || root.SUPABASE_ANON_KEY)
+        }
+      }, 25000);
+      if (res.status === 404) return { entries: [], note: 'HTTP 404 (chưa triển khai)' };
+      if (!res.ok) return { entries: [], note: 'HTTP ' + res.status };
+      var j = await res.json();
+      var srcs = (j && j.sources) || [];
+      var ok = srcs.filter(function (e) { return e && e.source && e.price != null; });
+      return { entries: ok, note: 'HTTP 200, ' + ok.length + ' nguồn' + (j && j.diag ? ' [' + j.diag + ']' : '') };
+    } catch (e) {
+      return { entries: [], note: 'lỗi: ' + (e.message || e) };
+    }
+  }
 
 
 
