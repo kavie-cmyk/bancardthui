@@ -120,6 +120,22 @@ create table if not exists card_images (
 -- (Tạo policy theo nhu cầu: app cá nhân có thể dùng service_role ở server,
 --  hoặc anon key + policy giới hạn theo auth.uid().)
 
+-- ============ Cài đặt theo tài khoản (đồng bộ giữa các thiết bị) ============
+-- Hiện dùng để đồng bộ API key CardSight: đăng nhập tài khoản nào thì key
+-- đi theo tài khoản đó (PC/điện thoại giống nhau), không còn phụ thuộc
+-- localStorage của từng trình duyệt. Mỗi user chỉ thấy/sửa dòng của mình.
+create table if not exists user_settings (
+  user_id uuid primary key,
+  cardsight_keys jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table user_settings enable row level security;
+drop policy if exists "own settings" on user_settings;
+create policy "own settings" on user_settings
+  for all to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- ============ FIFO trong SQL (tham khảo) ============
 -- Lấy các lô còn hàng của 1 card, cũ nhất trước:
 -- select * from inventory_lots

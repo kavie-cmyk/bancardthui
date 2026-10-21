@@ -491,3 +491,54 @@ a.num-cell.missing:hover .num-add { opacity: 1; }
 .cs-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--line-soft); border-radius: 10px; padding: 8px 12px; }
 .cs-label { font-weight: 700; }
 .cs-mask { color: var(--muted); font-family: monospace; }
+
+/* ---------- điện thoại (≤640px) ---------- */
+@media (max-width: 640px) {
+  body { font-size: 14.5px; }
+  .wrap { padding: 16px 12px 60px; }
+  .topbar-inner { padding: 8px 12px; gap: 8px; }
+  .brand-name { font-size: 15.5px; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 8px; }
+  .topbar .btn-ghost { padding: 6px 8px; font-size: 12.5px; }
+  .ball-toggle { width: 30px; height: 30px; }
+  .seed-pill { font-size: 10px; padding: 4px 8px; }
+  .nav a { padding: 7px 10px; font-size: 13.5px; }
+  .page-title { font-size: 24px; }
+  .page-sub { font-size: 13px; }
+  .panel { padding: 14px; margin-bottom: 14px; }
+  .panel-title { font-size: 16.5px; }
+  .kpis { gap: 10px; }
+  .kpi { padding: 12px 14px; }
+  .kpi-value { font-size: 20px; }
+  .kpi-label { font-size: 12px; }
+  .hero { padding: 20px 16px; }
+  .hero-title { font-size: 24px; }
+  .card-grid { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; }
+  .set-grid { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 10px; }
+  /* Bảng: cuộn ngang xem đủ cột thay vì giấu cột như bản ≤900px */
+  .panel { overflow-x: auto; }
+  .tbl { min-width: 540px; }
+  .tbl th:nth-child(n+5), .tbl td:nth-child(n+5) { display: table-cell; }
+  .detail-head { gap: 14px; }
+  .detail-img { width: 128px; }
+  .form-grid { gap: 10px; }
+  /* Ô nhập 16px để iOS không tự phóng to khi chạm vào */
+  .field input, .field select, .field textarea,
+  .panel input, .panel select, .panel textarea { font-size: 16px; }
+  .form-actions { flex-wrap: wrap; }
+  .form-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .scan-found { flex-direction: column; }
+  .scan-thumb > * { width: 150px; height: 210px; }
+  #scan-preview { max-width: 100%; height: auto; }
+  .toast { left: 12px; right: 12px; width: auto; transform: translateY(20px); text-align: center; }
+  .toast.show { transform: translateY(0); }
+  .confirm-box { padding: 12px; }
+  .login-panel { padding: 22px 18px; }
+  .num-grid { grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); }
+  .chart-wrap { overflow-x: auto; }
+  .mkt-src { font-size: 13px; }
+}
+@media (max-width: 400px) {
+  .card-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-value { font-size: 18px; }
+}

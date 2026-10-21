@@ -1385,6 +1385,54 @@
   function saveCardSightKeys(list) {
     _csKeysMem = list;
     _lsSet(CS_KEYS, JSON.stringify(list));
+    schedulePushCardSightKeys();
+  }
+
+  // ---- Đồng bộ key CardSight theo TÀI KHOẢN (bảng user_settings) ----
+  // Trước đây key chỉ nằm ở localStorage của từng trình duyệt: đăng nhập
+  // bằng điện thoại là không có key. Nay key đi theo tài khoản đăng nhập —
+  // máy nào đăng nhập cũng tự nhận key; localStorage chỉ còn là bộ đệm.
+  function currentUserId() {
+    try {
+      var t = root.BCTAuth && root.BCTAuth.accessToken ? root.BCTAuth.accessToken() : null;
+      if (!t) return null;
+      var part = String(t).split('.')[1];
+      if (!part) return null;
+      var b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+      var json = decodeURIComponent(Array.prototype.map.call(atob(b64), function (c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(json).sub || null;
+    } catch (e) { return null; }
+  }
+  var _csPushTimer = null;
+  function pushCardSightKeys() {
+    var uid = currentUserId();
+    if (!uid || typeof SB === 'undefined' || !SB || !SB.upsert) return;
+    SB.upsert('user_settings',
+      [{ user_id: uid, cardsight_keys: getCardSightKeys(), updated_at: new Date().toISOString() }],
+      'user_id').catch(function () { /* bảng chưa tạo/offline: để lần sau */ });
+  }
+  function schedulePushCardSightKeys() {
+    if (_csPushTimer) clearTimeout(_csPushTimer);
+    _csPushTimer = setTimeout(pushCardSightKeys, 700);
+  }
+  async function syncCardSightKeys() {
+    var uid = currentUserId();
+    if (!uid || typeof SB === 'undefined' || !SB || !SB.q) return;
+    try {
+      var rows = await SB.q('user_settings', { select: 'cardsight_keys', eq: { user_id: uid }, limit: 1 });
+      var serverList = (rows && rows[0] && Array.isArray(rows[0].cardsight_keys))
+        ? rows[0].cardsight_keys.filter(function (x) { return x && x.token; }) : null;
+      if (serverList && serverList.length) {
+        var active = getCardSightKey();
+        _csKeysMem = serverList;
+        _lsSet(CS_KEYS, JSON.stringify(serverList));
+        if (!serverList.some(function (x) { return x.token === active; })) setCardSightKey(serverList[0].token);
+      } else if (getCardSightKeys().length) {
+        pushCardSightKeys(); // lần đầu: đẩy key đang có trên máy này lên tài khoản
+      }
+    } catch (e) { /* chưa có bảng user_settings: dùng localStorage như cũ */ }
   }
   function addCardSightKey(label, token) {
     token = String(token || '').trim();
@@ -1648,6 +1696,7 @@
     createListing: createListing, updateListing: updateListing, deleteListing: deleteListing,
     getCardSightKey: getCardSightKey, setCardSightKey: setCardSightKey,
     getCardSightKeys: getCardSightKeys, addCardSightKey: addCardSightKey, removeCardSightKey: removeCardSightKey,
+    syncCardSightKeys: syncCardSightKeys,
     identifyCardByPhoto: identifyCardByPhoto, parseCardSightResult: parseCardSightResult,
     wipeAll: wipeAll, reseed: reseed, exportJSON: exportJSON
   };

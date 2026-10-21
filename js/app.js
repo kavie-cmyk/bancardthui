@@ -112,6 +112,7 @@
     try {
       S = await BCT.load();
       if (S._justSeeded) setSeededUI(true);
+      if (BCT.syncCardSightKeys) { try { await BCT.syncCardSightKeys(); } catch (e) {} }
     } catch (e) {
       showLoading(false);
       chromeVisible(true);
