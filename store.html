@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bán Card Thui — Pokémon TCG singles có sẵn</title>
+<meta name="description" content="Xem các lá Pokémon TCG đang bán tại Bán Card Thui: ảnh thật/chính thức, tình trạng, giá bán rõ ràng. Nhắn tin cho shop để mua.">
+<meta property="og:title" content="Bán Card Thui — Pokémon TCG singles">
+<meta property="og:description" content="Các lá Pokémon TCG đang có sẵn: giá bán + tình trạng rõ ràng. Nhắn tin cho shop để mua hàng.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/store.css?v=20261021-sf1">
+</head>
+<body>
+<header class="shop-head">
+  <div class="shop-head-in">
+    <div class="shop-brand">
+      <div class="shop-name">Bán Card <em>Thui</em></div>
+      <div class="shop-tag">Pokémon TCG singles — hàng có sẵn, giá rõ ràng</div>
+    </div>
+    <div class="shop-contact" id="shop-contact"></div>
+  </div>
+</header>
+
+<main class="shop-wrap">
+  <div class="shop-tools">
+    <input id="q" type="search" placeholder="Tìm lá bài, tên set…" autocomplete="off">
+    <div class="chips" id="lang-chips">
+      <button class="chip on" data-lang="all">Tất cả</button>
+      <button class="chip" data-lang="en">Bản Anh</button>
+      <button class="chip" data-lang="jp">Bản Nhật</button>
+    </div>
+    <select id="sort" aria-label="Sắp xếp">
+      <option value="new">Mới đăng trước</option>
+      <option value="asc">Giá thấp → cao</option>
+      <option value="desc">Giá cao → thấp</option>
+    </select>
+  </div>
+
+  <div id="state" class="shop-state">Đang tải hàng…</div>
+  <div id="grid" class="shop-grid"></div>
+
+  <footer class="shop-foot">
+    <p><b>Cách mua:</b> nhắn tin cho shop qua Messenger hoặc Zalo, gửi tên lá bạn muốn — shop xác nhận còn hàng và hướng dẫn thanh toán, ship COD toàn quốc.</p>
+    <p class="dim">Trang này chỉ hiển thị các lá đang bán. Giá và số lượng cập nhật theo kho thực tế của shop.</p>
+  </footer>
+</main>
+
+<script src="js/config.js?v=20261021-sf1"></script>
+<script src="js/sets-db.js?v=20261021-sf1"></script>
+<script src="js/storefront.js?v=20261021-sf1"></script>
+</body>
+</html>

@@ -1575,7 +1575,8 @@
     var prefillCardId = q.card || '';
     var listings = (S.listings || []).slice().sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? 1 : -1; });
     var shown = listingFilter.status ? listings.filter(function (l) { return l.status === listingFilter.status; }) : listings;
-    var html = '<h1 class="page-title">Rao bán</h1><p class="page-sub">' + listings.length + ' tin rao · Chuẩn bị giá và số lượng trước, khi nào bán thật thì chuyển trạng thái sang "Đang rao". Đây là quản lý nội bộ — chưa phải trang bán hàng công khai.</p>';
+    var html = '<h1 class="page-title">Rao bán</h1><p class="page-sub">' + listings.length + ' tin rao · Chuẩn bị giá và số lượng trước, khi nào bán thật thì chuyển trạng thái sang "Đang rao" — tin "Đang rao" sẽ tự hiện trên trang bán hàng công khai cho khách.</p>' +
+      '<p class="page-sub"><a class="btn-ghost" href="store.html" target="_blank" rel="noopener" style="text-decoration:none">Mở trang bán hàng cho khách ↗</a> <span style="color:var(--muted)">— khách chỉ thấy các tin đang "Đang rao", không cần đăng nhập.</span></p>';
 
     html += '<form id="f-rao"><section class="panel"><h3 style="margin-top:0">Tạo tin rao mới</h3><div class="form-grid">';
     html += '<div class="field full"><label>Card *</label><select id="r-card">' +

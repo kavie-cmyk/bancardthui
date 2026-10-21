@@ -6,6 +6,12 @@
   'use strict';
   root.SUPABASE_URL = 'https://ntfvcajbmmduloxbnygd.supabase.co';
   root.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50ZnZjYWpibW1kdWxveGJueWdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5NjA3NDAsImV4cCI6MjEwNzUzNjc0MH0.IiAZohnZZpBYWIWAUpmXpXk64GNDV0n_odYXQsfqYS0';
+  // ---- Storefront công khai (store.html) ----
+  // Link liên hệ mua hàng hiện trên trang khách. Để trống = nút không hiện.
+  // Zac điền link trang Facebook/Messenger (vd https://m.me/tenpage) và Zalo
+  // (vd https://zalo.me/so-dien-thoai) của shop vào 2 dòng dưới.
+  root.SHOP_MESSENGER_URL = '';
+  root.SHOP_ZALO_URL = '';
   // Tỷ giá quy đổi ngoại tệ→VND để tính giá tham khảo (ƯỚC TÍNH — sửa trực tiếp tại đây)
   root.EUR_VND = 28000;
   root.USD_VND = 26000;

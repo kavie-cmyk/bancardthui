@@ -1,0 +1,117 @@
+/* Bán Card Thui — storefront công khai (khách xem, không đăng nhập).
+   Phong cách đồng bộ app kho (vault tối + vàng) nhưng nhẹ và thân thiện
+   cho người mua phổ thông. Mobile-first. */
+:root {
+  --bg: #12100c;
+  --panel: #1c1913;
+  --panel2: #242017;
+  --line: #37311f;
+  --ink: #f2ecdd;
+  --muted: #a79e88;
+  --gold: #e8b44a;
+  --gold-soft: #f5cf7d;
+  --green: #8fd694;
+  --radius: 14px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Space Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+em { font-style: normal; color: var(--gold-soft); }
+
+/* ---------- header ---------- */
+.shop-head {
+  position: sticky; top: 0; z-index: 20;
+  background: rgba(18, 16, 12, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.shop-head-in {
+  max-width: 1120px; margin: 0 auto; padding: 14px 16px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.shop-brand { flex: 1 1 auto; min-width: 200px; }
+.shop-name {
+  font-family: "Bricolage Grotesque", "Space Grotesk", sans-serif;
+  font-size: 26px; font-weight: 800; letter-spacing: 0.2px; line-height: 1.1;
+}
+.shop-tag { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.shop-contact { display: flex; gap: 8px; }
+.contact-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 14px; border-radius: 999px; font-weight: 600; font-size: 14px;
+  text-decoration: none; border: 1px solid var(--line);
+  background: var(--panel2); color: var(--ink);
+}
+.contact-btn.primary { background: var(--gold); border-color: var(--gold); color: #221a05; }
+.contact-btn:active { transform: translateY(1px); }
+
+/* ---------- layout / tools ---------- */
+.shop-wrap { max-width: 1120px; margin: 0 auto; padding: 16px; }
+.shop-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.shop-tools input[type="search"] {
+  flex: 1 1 220px; padding: 11px 14px; border-radius: 10px; font-size: 16px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+}
+.shop-tools select {
+  padding: 11px 10px; border-radius: 10px; font-size: 15px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+}
+.chips { display: flex; gap: 6px; }
+.chip {
+  padding: 9px 13px; border-radius: 999px; font-size: 14px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+  font-family: inherit;
+}
+.chip.on { background: var(--gold); border-color: var(--gold); color: #221a05; font-weight: 700; }
+
+.shop-state { color: var(--muted); padding: 28px 8px; text-align: center; font-size: 15px; }
+.shop-state.err { color: #e58a7a; }
+
+/* ---------- grid + tile ---------- */
+.shop-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 720px) { .shop-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .shop-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tile {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.tile-img {
+  aspect-ratio: 63 / 88; background: #0c0a07;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.tile-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.tile-img .ph { color: var(--muted); font-size: 13px; padding: 12px; text-align: center; }
+.tile-body { padding: 11px 12px 13px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.tile-name { font-weight: 700; font-size: 16px; line-height: 1.25; }
+.tile-set { color: var(--muted); font-size: 13px; }
+.badges { display: flex; flex-wrap: wrap; gap: 5px; }
+.badge {
+  font-size: 11.5px; padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+}
+.badge.gold { color: var(--gold-soft); border-color: #6b5518; }
+.badge.graded { color: #0e2412; background: var(--green); border-color: var(--green); font-weight: 700; }
+.tile-price {
+  margin-top: auto; font-family: "IBM Plex Mono", monospace;
+  font-size: 19px; font-weight: 600; color: var(--gold-soft);
+}
+.tile-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tile-qty { color: var(--green); font-size: 13px; font-weight: 600; }
+.buy-btn {
+  display: inline-block; text-align: center; margin-top: 8px;
+  padding: 9px 12px; border-radius: 10px; font-weight: 700; font-size: 14px;
+  background: var(--gold); color: #221a05; text-decoration: none;
+}
+.buy-btn:active { transform: translateY(1px); }
+
+/* ---------- footer ---------- */
+.shop-foot { margin-top: 30px; padding: 16px 4px 8px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.55; }
+.shop-foot .dim { color: var(--muted); font-size: 13px; }
