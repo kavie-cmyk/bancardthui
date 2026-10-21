@@ -1105,7 +1105,7 @@
         var c = BCT.getCard(S, targetId());
         if (!c) throw new Error('Không tìm thấy card.');
         var setName = document.getElementById('sp-set').value.trim();
-        var hit = lookupSetByName(setName);
+        var hit = lookupSetByName(setName, c.language || 'en');
         var rar = document.getElementById('sp-rarity').value;
         await BCT.updateCard(S, targetId(), {
           number: document.getElementById('sp-number').value.trim(),
@@ -1178,8 +1178,7 @@
       BCT.CONDITIONS.map(function (k) { return '<option' + ((lot.condition || 'A') === k ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></div>';
     html += '<div class="field"><label>Phiên bản</label><select id="l-variant">' +
       BCT.VARIANTS.map(function (v) { return '<option value="' + BCT.esc(v) + '"' + ((lot.variant || 'Normal') === v ? ' selected' : '') + '>' + BCT.esc((BCT.VARIANT_LABELS && BCT.VARIANT_LABELS[v]) || v) + '</option>'; }).join('') + '</select></div>';
-    html += '<div class="field"><label>Mẫu holo</label><select id="l-holo"><option value="">— Không có —</option>' +
-      BCT.HOLO_PATTERNS.map(function (h) { return '<option' + (lot.holoPattern === h ? ' selected' : '') + '>' + BCT.esc(h) + '</option>'; }).join('') + '</select></div>';
+    html += '<div class="field"><label for="l-holo">Mẫu holo</label>' + holoInput('l-holo', lot.holoPattern) + '</div>';
     html += '</div><div class="form-actions"><button class="btn" type="submit">' + IC.check + ' Lưu thay đổi</button><a class="btn secondary" href="#/kho/' + c.id + '" style="text-decoration:none">Hủy</a></div>';
     html += '</section></form>';
     html += '<section class="panel" style="border-color:rgba(224,122,106,.4)"><div class="panel-head"><h2 class="panel-title" style="color:var(--red)">Xóa lô này</h2></div>' +
@@ -1269,19 +1268,19 @@
     (S.customSets || []).forEach(function (s) {
       out += '<option value="' + BCT.esc(s.name) + '" label="Tự tạo">';
     });
-    if (window.BCT_SETS) out += window.BCT_SETS.list.map(function (s) {
-      return '<option value="' + BCT.esc(s.name) + '">';
+    if (window.BCT_SETS) out += window.BCT_SETS.list.concat(window.BCT_SETS.jaList || []).map(function (s) {
+      return '<option value="' + BCT.esc(s.name) + '" label="' + BCT.esc(s.id) + '">';
     }).join('');
     return out;
   }
 
   // Tìm set theo tên user gõ → ưu tiên set tự tạo, rồi mới tới TCGdex
-  function lookupSetByName(name) {
+  function lookupSetByName(name, language) {
     if (!name) return null;
     var cs = BCT.customSetByName(S, name);
     if (cs) return { id: cs.id, name: cs.name, total: cs.total, official: cs.official, year: cs.year, custom: true };
     if (!window.BCT_SETS) return null;
-    return window.BCT_SETS.byName(name);
+    return window.BCT_SETS.byName(name, language);
   }
 
   // Tìm set theo id (dùng cho prefill từ checklist) → ưu tiên set tự tạo
@@ -1289,7 +1288,7 @@
     if (!id) return null;
     var cs = BCT.getCustomSet(S, id);
     if (cs) return { id: cs.id, name: cs.name, total: cs.total, official: cs.official, year: cs.year, custom: true };
-    if (window.BCT_SETS && window.BCT_SETS.byId) return window.BCT_SETS.byId(id);
+    if (window.BCT_SETS && window.BCT_SETS.byId) return id.indexOf('ja:') === 0 ? window.BCT_SETS.byId(id.slice(3), 'jp') : window.BCT_SETS.byId(id);
     return null;
   }
 
@@ -1302,13 +1301,23 @@
       ' (tổng ' + s.total + ' lá).';
   }
 
+  function holoInput(id, value) {
+    var patterns = BCT.HOLO_PATTERNS.slice();
+    (S.lots || []).forEach(function (l) {
+      if (l.holoPattern && patterns.indexOf(l.holoPattern) < 0) patterns.push(l.holoPattern);
+    });
+    return '<input id="' + id + '" list="' + id + '-options" value="' + BCT.esc(value || '') + '" placeholder="Chọn hoặc gõ mẫu holo…" autocomplete="off">' +
+      '<datalist id="' + id + '-options">' + patterns.map(function (h) { return '<option value="' + BCT.esc(h) + '">'; }).join('') + '</datalist>' +
+      '<div class="hint">Chọn mẫu gợi ý hoặc nhập tên riêng. Để trống nếu chưa xác định.</div>';
+  }
+
   function vNhap(q) {
     q = q || {};
     pendingImages = [];
     var prefillCardId = q.card || '';
     // Prefill từ checklist: #/nhap?newcard=1&setkey=<id>&num=<n>
     var forceNew = q.newcard === '1';
-    var preSetName = '', preNum = q.num || '';
+    var preSetName = '', preNum = q.num || '', preLang = q.setkey && q.setkey.indexOf('ja:') === 0 ? 'jp' : 'en';
     if (forceNew && q.setkey) {
       var ps = lookupSetById(q.setkey);
       if (ps) preSetName = ps.name;
@@ -1328,7 +1337,7 @@
       '<div class="field"><label>Độ hiếm</label><select id="n-rarity"><option value="">— Chọn —</option>' +
       BCT.RARITIES.map(function (r) { return '<option>' + r + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label>Ngôn ngữ</label><select id="n-lang">' +
-      Object.keys(BCT.LANGUAGES).map(function (k) { return '<option value="' + k + '">' + BCT.LANGUAGES[k] + '</option>'; }).join('') + '</select></div>' +
+      Object.keys(BCT.LANGUAGES).map(function (k) { return '<option value="' + k + '"' + (k === preLang ? ' selected' : '') + '>' + BCT.LANGUAGES[k] + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label>Condition</label><select id="n-cond">' +
       BCT.CONDITIONS.map(function (k) { return '<option>' + k + '</option>'; }).join('') + '</select><div class="hint">New Mint / A / B / C / D.</div></div>' +
       '<div class="field"><label>Vị trí lưu trữ</label><input id="n-storage" placeholder="VD: Hộp A3, Binder 2 - trang 15"></div>' +
@@ -1346,9 +1355,7 @@
     html += '<div class="field"><label>Phiên bản</label><select id="n-variant">' +
       BCT.VARIANTS.map(function (v) { return '<option>' + v + '</option>'; }).join('') +
       '</select><div class="hint">Bản thường / Reverse Holo / Holo / 1st Edition.</div></div>';
-    html += '<div class="field"><label>Mẫu holo</label><select id="n-holo"><option value="">— Không ghi nhận —</option>' +
-      BCT.HOLO_PATTERNS.map(function (h) { return '<option>' + BCT.esc(h) + '</option>'; }).join('') +
-      '</select><div class="hint">Cosmos, Poké Ball / Master Ball (reverse holo)… — ghi nhận để tra giá & sưu tầm.</div></div>';
+    html += '<div class="field"><label for="n-holo">Mẫu holo</label>' + holoInput('n-holo', '') + '</div>';
     html += '</div>';
     html += '<div class="form-actions"><button class="btn" type="submit">' + IC.check + ' Lưu lô nhập</button><a class="btn secondary" href="#/kho" style="text-decoration:none">Hủy</a></div>';
     html += '</section></form>';
@@ -1458,13 +1465,11 @@
   }
 
   function scanConfirmHTML(res) {
-    // CardSight đôi khi trả setName là nhãn phụ (vd "Checklist") còn tên set thật
-    // nằm ở releaseName — thử khớp cả hai, lấy cái nào khớp được dữ liệu TCGdex.
-    var matched = lookupSetByName(res.setName || '') || (res.releaseName ? lookupSetByName(res.releaseName) : null);
-    var setShown = matched ? matched.name : (res.setName || res.releaseName || '');
-    var tmpCard = { setId: matched ? matched.id : '', number: res.number || '', name: res.name || '', images: [] };
+    var choice = BCT.scanSetChoice(S, res);
+    var matched = choice.match, setShown = choice.name;
+    var tmpCard = { setId: matched ? matched.id : '', language: res.language || 'other', number: res.number || '', name: res.name || '', images: [] };
     var variantOpts = BCT.VARIANTS.map(function (v) {
-      var sel = res.foil && v === 'Holo' ? ' selected' : (!res.foil && v === 'Normal' ? ' selected' : '');
+      var sel = res.variant === v ? ' selected' : '';
       return '<option value="' + BCT.esc(v) + '"' + sel + '>' + BCT.esc((BCT.VARIANT_LABELS && BCT.VARIANT_LABELS[v]) || v) + '</option>';
     }).join('');
     var rarOpts = BCT.RARITIES.map(function (r) { return '<option value="' + BCT.esc(r) + '"' + (res.rarity && r.toLowerCase() === String(res.rarity).toLowerCase() ? ' selected' : '') + '>' + BCT.esc(r) + '</option>'; }).join('');
@@ -1474,18 +1479,19 @@
     var html = '<div class="scan-found"><div class="scan-thumb">' + cardImgTag(tmpCard, res.name) + '</div><div>' +
       '<div class="scan-name">' + BCT.esc(res.name) + '</div>' +
       '<div class="scan-meta">' + BCT.esc([res.setName, (res.releaseName && res.releaseName !== res.setName) ? res.releaseName : '', res.number ? 'số ' + res.number : '', res.year].filter(Boolean).join(' · ')) + '</div>' +
-      (matched ? '<div class="scan-meta">Khớp set trong dữ liệu: <b>' + BCT.esc(matched.name) + '</b> — ảnh chính thức sẽ tự hiển thị.</div>'
-               : '<div class="scan-meta warn">Chưa khớp được set "' + BCT.esc(setShown || '?') + '" với dữ liệu TCGdex — kiểm tra lại tên set ở form dưới, hoặc lá này sẽ dùng ảnh chụp làm ảnh chính.</div>') +
-      (res.confidence ? '<div class="scan-meta">Độ tin cậy của AI: <b>' + BCT.esc(res.confidence) + '</b>' + (res.alternatives ? ' · có ' + res.alternatives + ' phương án khác — nếu thấy sai, sửa thẳng ở form dưới' : '') + (res.parallel ? ' · Biến thể gợi ý: ' + BCT.esc(res.parallel) : '') + '</div>' : '') +
+      (matched ? '<div class="scan-meta">Khớp set trong dữ liệu: <b>' + BCT.esc(matched.name) + '</b> — kiểm tra lại số và biến thể trước khi lưu.</div>'
+               : '<div class="scan-meta warn">Chưa khớp được set "' + BCT.esc(setShown || '?') + '" với danh mục — giữ tên set thật ở form dưới, hoặc chọn bằng mã set (vd SV2a). Có thể dùng ảnh chụp khi chưa có mã.</div>') +
+      (res.confidence ? '<div class="scan-meta">Độ tin cậy của AI: <b>' + BCT.esc(res.confidence) + '</b>' + (res.alternatives ? ' · có ' + res.alternatives + ' phương án khác — nếu thấy sai, sửa thẳng ở form dưới' : '') + (res.parallel ? ' · Biến thể gợi ý (cần kiểm tra): ' + BCT.esc(res.parallel) : '') + '</div>' : '') +
       (res.graded ? '<div class="scan-meta">Lá đang trong slab: <b>' + BCT.esc(res.graded.org) + ' ' + BCT.esc(res.graded.score) + '</b>' + (res.graded.cert ? ' · cert ' + BCT.esc(res.graded.cert) : '') + ' — thông tin này sẽ tự lưu kèm card.</div>' : '') +
       '</div></div>';
     html += '<form id="f-scan"><div class="form-grid">' +
       fld('Tên lá *', '<input id="s-name" required value="' + BCT.esc(res.name) + '">') +
-      fld('Set (gõ để chọn)', '<input id="s-setname" list="set-list" value="' + BCT.esc(setShown) + '" placeholder="Tên set"><datalist id="set-list">' + setDatalistOptions() + '</datalist>') +
+      fld('Set thật * (tên hoặc mã set)', '<input id="s-setname" required list="set-list" value="' + BCT.esc(setShown) + '" placeholder="Tên set"><datalist id="set-list">' + setDatalistOptions() + '</datalist>') +
       fld('Số thứ tự', '<input id="s-number" value="' + BCT.esc(res.number || '') + '" placeholder="vd 025/165">') +
-      fld('Ngôn ngữ', '<select id="s-lang"><option value="en"' + (res.language === 'en' ? ' selected' : '') + '>Tiếng Anh</option><option value="jp"' + (res.language === 'jp' ? ' selected' : '') + '>Tiếng Nhật</option><option value="other"' + (res.language === 'other' ? ' selected' : '') + '>Khác</option></select>') +
+      fld('Ngôn ngữ', '<select id="s-lang" required><option value="">— Chọn ngôn ngữ —</option><option value="en"' + (res.language === 'en' ? ' selected' : '') + '>Tiếng Anh</option><option value="jp"' + (res.language === 'jp' ? ' selected' : '') + '>Tiếng Nhật</option><option value="other"' + (res.language === 'other' ? ' selected' : '') + '>Khác</option></select>') +
       fld('Độ hiếm', '<select id="s-rarity">' + rarOpts + '</select>') +
-      fld('Phiên bản', '<select id="s-variant">' + variantOpts + '</select>') +
+      fld('Phiên bản *', '<select id="s-variant" required><option value="">— Kiểm tra và chọn —</option>' + variantOpts + '</select>') +
+      fld('Mẫu holo', holoInput('s-holo', res.holoPattern)) +
       fld('Tình trạng', '<select id="s-cond">' + condOpts + '</select>') +
       fld('Số lượng nhập *', '<input id="s-qty" type="number" min="1" value="1" required>') +
       fld('Giá vốn / lá (đ) *', '<input id="s-cost" inputmode="numeric" placeholder="vd 150.000" required>') +
@@ -1510,12 +1516,14 @@
         if (qty <= 0) throw new Error('Nhập số lượng lớn hơn 0.');
         if (cost < 0) throw new Error('Giá vốn không hợp lệ.');
         var setName = $('s-setname').value.trim();
-        var setHit = lookupSetByName(setName);
+        if (!setName || BCT.isGenericSetName(setName)) throw new Error('Hãy chọn tên set thật; không dùng nhãn Checklist.');
+        var language = $('s-lang').value;
+        if (!language) throw new Error('Hãy xác nhận ngôn ngữ lá bài.');
+        if (!$('s-variant').value) throw new Error('Hãy xác nhận phiên bản của lá bài.');
+        var setHit = lookupSetByName(setName, language);
         var num = $('s-number').value.trim();
         var dup = S.cards.filter(function (x) {
-          return x.name.toLowerCase() === name.toLowerCase()
-            && String(x.number || '') === num
-            && ((setHit && x.setId === setHit.id) || (x.set || '').toLowerCase() === setName.toLowerCase());
+          return BCT.sameCardIdentity(x, { name: name, number: num, set: setName, setId: setHit ? setHit.id : null, language: language });
         })[0];
         var cardId, created = false;
         if (dup) {
@@ -1525,7 +1533,7 @@
           var card = await BCT.addCard(S, {
             name: name, set: setName, setId: setHit ? setHit.id : null,
             number: num, rarity: $('s-rarity').value, condition: $('s-cond').value,
-            language: $('s-lang').value || 'en', storageLocation: '', note: 'Nhập qua Quét thẻ (CardSight)',
+            language: language, storageLocation: '', note: 'Nhập qua Quét thẻ (CardSight)',
             graded: g ? { org: g.org, score: g.score || '' } : null,
             certNumber: g ? (g.cert || '') : ''
           });
@@ -1535,7 +1543,7 @@
         await BCT.addLot(S, {
           cardId: cardId, qty: qty, costPerUnit: cost,
           importDate: $('s-date').value || BCT.todayISO(), source: $('s-source').value.trim(),
-          variant: $('s-variant').value || 'Normal', holoPattern: null,
+          variant: $('s-variant').value || 'Normal', holoPattern: $('s-holo').value.trim() || null,
           condition: lotCard ? BCT.condLabel(lotCard.condition) : 'A'
         });
         if ($('s-usephoto').value === '1' && scanState.photo) {
@@ -1743,7 +1751,7 @@
           var nm = $('e-name').value.trim();
           if (!nm) throw new Error('Nhập tên card.');
           var setName = eSet.value.trim();
-          var hit = lookupSetByName(setName);
+          var hit = lookupSetByName(setName, $('e-lang').value || 'en');
           var gOrg = $('e-graded-org').value, gScore = $('e-graded-score').value.trim();
           await BCT.updateCard(S, cid, {
             name: nm, set: setName, setId: hit ? hit.id : null,
@@ -1789,7 +1797,7 @@
             source: $('l-source').value.trim(),
             condition: $('l-cond').value,
             variant: $('l-variant').value,
-            holoPattern: $('l-holo').value || null
+            holoPattern: $('l-holo').value.trim() || null
           });
           toast('Đã lưu thay đổi lô.');
           location.hash = '#/kho/' + lcid;
@@ -1890,11 +1898,12 @@
             if (!name) throw new Error('Nhập tên card.');
             var gOrg = $('n-graded-org').value, gScore = $('n-graded-score').value.trim();
             var setName = $('n-set').value.trim();
-            var setHit = lookupSetByName(setName);
+            var setHit = lookupSetByName(setName, $('n-lang').value || 'en');
             var newNum = $('n-number').value.trim();
             // Chặn tách kho do tạo trùng: cùng tên + cùng số + cùng set thì gần như chắc chắn là 1 card.
             var dup = S.cards.filter(function (x) {
-              return x.name.toLowerCase() === name.toLowerCase()
+              return (x.language || 'en') === ($('n-lang').value || 'en')
+                && x.name.toLowerCase() === name.toLowerCase()
                 && String(x.number || '') === newNum
                 && ((setHit && x.setId === setHit.id) || (x.set || '').toLowerCase() === setName.toLowerCase());
             })[0];
@@ -1924,7 +1933,7 @@
           await BCT.addLot(S, {
             cardId: cardId, qty: qty, costPerUnit: cost, importDate: date, source: source,
             variant: $('n-variant').value || 'Normal',
-            holoPattern: $('n-holo').value || null,
+            holoPattern: $('n-holo').value.trim() || null,
             condition: lotCard ? BCT.condLabel(lotCard.condition) : 'A'
           });
           if (pendingImages.length) {

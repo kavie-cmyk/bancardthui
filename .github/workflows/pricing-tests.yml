@@ -1,4 +1,4 @@
-name: Pricing regression tests
+name: Card and pricing regression tests
 on:
   push:
     paths: ['js/**', 'index.html', 'supabase/functions/price-proxy/**', 'tests/**', '.github/workflows/pricing-tests.yml']
@@ -14,4 +14,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: node --test tests/pricing.test.mjs
+      - run: node --test tests/*.test.mjs

@@ -22,11 +22,7 @@ python3 -m http.server 8000
 Nên chạy qua http server thay vì mở thẳng file `index.html`: link đăng nhập (magic link)
 cần một URL khớp với Redirect URL đã cấu hình trong Supabase Auth.
 
-Lần đầu mở (kho đang trống, chưa từng nạp mẫu), app tự nạp **dữ liệu mẫu**
-(9 card, 10 đơn) để xem dashboard sống ngay. Nút **"Xóa dữ liệu mẫu"** trên thanh
-header để bắt đầu kho trống — sau khi đã xóa, app **không** tự nạp lại mẫu khi tải lại
-trang (cờ local `bct_seed_done_v1`). Muốn xem lại mẫu: nút **"Nạp dữ liệu mẫu"**
-(dữ liệu hiện tại sẽ bị thay thế).
+Kho trống giữ nguyên trạng thái trống; app không tự nạp dữ liệu mẫu.
 
 Cần internet cho Supabase, Google Fonts và ảnh card từ TCGdex CDN.
 
@@ -62,7 +58,7 @@ TCGdex CDN (dựng từ set_id + số thứ tự + ngôn ngữ) → ảnh placeh
 
 ## Các view
 
-- **Tổng quan** — KPI kho/doanh thu/lãi, biểu đồ tuần, bán chạy, hàng chậm, sắp hết hàng, hoạt động gần đây.
+- **Tổng quan** — KPI kho/doanh thu/lãi, biểu đồ tuần, bán chạy, tồn lâu nhất, hoạt động gần đây.
 - **Kho card** — lọc theo set/độ hiếm/ngôn ngữ/mẫu holo/vị trí lưu trữ, chỉ lá lỗi in, chỉ lá graded; chi tiết từng card (các lô, lịch sử giá bán, giá thị trường, tin rao của lá đó).
 - **Bộ sưu tập** — theo set, checklist (xem mục riêng phía dưới).
 - **Nhập kho** — mỗi lần nhập là 1 lô. Tạo card mới ngay trong form (có cảnh báo nếu trùng tên + số + set với card đã có), hoặc chọn card có sẵn để nhập thêm lô. Ảnh chụp tự nén còn ~800px JPEG trước khi up lên Storage.
@@ -111,7 +107,7 @@ TCGdex CDN (dựng từ set_id + số thứ tự + ngôn ngữ) → ảnh placeh
 1. Chạy `supabase/price-feed-cache.sql` một lần. Bảng bật RLS, thu hồi quyền `anon`/`authenticated`; chỉ backend `service_role` được đọc/ghi. Không lưu dữ liệu kho vào cache.
 2. Deploy Edge Function `price-proxy`, giữ **Verify JWT bật**, bao gồm `supabase/functions/price-proxy/index.ts` và dependency `js/pricing.js`. `SUPABASE_URL` và `SUPABASE_SERVICE_ROLE_KEY` lấy từ biến môi trường mặc định của Edge Functions; không đưa service key vào frontend.
 3. Publish các file frontend cùng nhau, gồm `js/pricing.js` trước `js/store.js` như `index.html`.
-4. Chạy `node --test tests/pricing.test.mjs` (Node 24+). CI tự chạy các kiểm thử này khi phần giá thay đổi.
+4. Chạy `node --test tests/*.test.mjs` (Node 24+). CI tự chạy các kiểm thử này khi phần giá thay đổi.
 5. Kiểm tra đường dự phòng bằng `GET /functions/v1/price-proxy?set=sv08&number=226&missing=tcgplayer` với headers xác thực hiện có. Kết quả thành công chứa `sources` với `via: "tcgcsv"`, `product_id` và `updated_at`; lần gọi kế tiếp đọc cache, không tải lại bộ giá. Nếu feed không có lá đó, app vẫn hiển thị nguồn lấy được và giữ giá đã lưu.
 
 ## FIFO — logic cốt lõi
@@ -164,3 +160,23 @@ kho, nguồn giá hay cách tính vốn. Ảnh nền và nguồn sprite ở `ass
 `tests/hoenn-ui.html` là fixture giao diện với dữ liệu giả trong bộ nhớ, không
 kết nối Supabase. Dùng để kiểm tra desktop/mobile, chuyển theme, bộ lọc, phân
 trang, chọn thẻ và cập nhật giá mà không ghi vào kho thật.
+
+## Quét thẻ và mẫu holo
+
+- `Checklist` / `Base Checklist` là nhãn catalog của CardSight. Khi gặp nhãn này,
+  parser dùng `releaseName`; nếu không có tên thật, form yêu cầu chọn set trước khi lưu.
+  Cả tạo mới và sửa card đều chặn tên set `Checklist` ở lớp dữ liệu.
+- `js/sets-db.js` chứa thêm 184 set Nhật, lấy từ
+  <https://api.tcgdex.net/v2/ja/sets> ngày 2026-10-21. Có thể chọn bằng tên Nhật hoặc
+  mã như `SV2a`. Chỉ khớp chính xác trong đúng ngôn ngữ; tên phiên âm chưa khớp được
+  giữ nguyên và không tự gán mã set Anh. Không dùng UUID CardSight làm mã TCGdex.
+- Set Nhật dùng khóa nhóm `ja:<id>` để tách checklist Anh/Nhật, kể cả mã trùng nhau
+  như `neo1`. So khớp card nhập qua quét cũng kiểm tra ngôn ngữ.
+- Phiên bản in (Normal / Holo / Reverse Holo) và mẫu màng holo là hai trường riêng.
+  Mẫu holo có gợi ý mở rộng, đồng thời cho nhập tên tùy ý ở nhập kho, sửa lô, quét thẻ;
+  các tên đã dùng sẽ xuất hiện lại trong gợi ý. Không đổi giá trị holo cũ.
+- Theo [schema CardSight](https://api.cardsight.ai/documentation), vị trí đầu danh sách
+  `parallelSuggestions` không đồng nghĩa đã xác nhận. Chỉ tự chọn finish khi có duy
+  nhất một gợi ý High nhận diện được; các trường hợp còn lại yêu cầu chọn ở form.
+- Kiểm tra hồi quy: `node --test tests/*.test.mjs` (Node 24+), gồm response CardSight
+  giả lập, render form và submit qua backend stub; không tốn lượt scan thật.

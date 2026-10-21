@@ -79,7 +79,11 @@
   var VARIANTS = ['Normal', 'Reverse Holo', 'Holo', '1st Edition'];
 
   // Mẫu holo chi tiết (dân sưu tầm) — nullable, mặc định không ghi nhận
-  var HOLO_PATTERNS = ['Cosmos', 'Cosmos Swirl', 'Poké Ball', 'Master Ball', 'Mirror', 'Cracked Ice', 'Confetti', 'Khác'];
+  // Suggestions only; holo_pattern remains free text for new or uncommon treatments.
+  var HOLO_PATTERNS = ['Galaxy', 'Cosmos', 'Cosmos Swirl', 'Poké Ball', 'Master Ball',
+    'Mirror', 'Cracked Ice', 'Confetti', 'Crosshatch', 'Disco', 'Sequin', 'Sheen',
+    'Tinsel', 'Pixel', 'Mosaic', 'Silver', 'Smooth', 'Water Web', 'Energy',
+    'Checkerboard', 'Dot Grid', 'Textured', 'Khác'];
 
   // TCGdex CDN dùng 'ja' cho tiếng Nhật (không phải 'jp')
   var CDN_LANG = { en: 'en', jp: 'ja', other: 'en' };
@@ -334,6 +338,7 @@
 
   async function addCard(state, def) {
     if (!def.name || !String(def.name).trim()) throw new Error('Nhập tên card.');
+    if (isGenericSetName(def.set)) throw new Error('Checklist là nhãn danh mục, không phải tên set. Hãy chọn set thật.');
     var r = await tolerantIns('cards', cardRow(def), CARD_MAYBE_COLS);
     var card = mapCard(r, []);
     state.cards.push(card);
@@ -343,6 +348,7 @@
   async function updateCard(state, id, patch) {
     // patch thêm: {storageLocation,misprint,certNumber,certPop,priceSources,marketPrice,marketCurrency,marketSource,marketUpdatedAt}
     var row = {};
+    if (isGenericSetName(patch.set)) throw new Error('Checklist là nhãn danh mục, không phải tên set. Hãy chọn set thật.');
     if (patch.name !== undefined) row.name = patch.name;
     if (patch.set !== undefined) row.set = patch.set || null;
     if (patch.setId !== undefined) row.set_id = patch.setId || null;
@@ -788,8 +794,11 @@
   // db theo tên → custom theo tên → user tự nhập (set_totals) → null (chưa rõ).
   // Trả về { key, id, name, total, official, year, source }
   function resolveSet(state, cardOrKey) {
-    var key, setId = null, name = null;
-    if (typeof cardOrKey === 'string') { key = cardOrKey; }
+    var key, setId = null, name = null, language = typeof cardOrKey === 'object' ? (cardOrKey.language || 'en') : 'en';
+    if (typeof cardOrKey === 'string') {
+      key = cardOrKey;
+      if (key.indexOf('ja:') === 0) { language = 'jp'; key = key.slice(3); setId = key; name = key; }
+    }
     else { setId = cardOrKey.setId || null; name = cardOrKey.set || null; key = setId || name || ''; }
     var csById = (setId && getCustomSet(state, setId)) ||
       (typeof cardOrKey === 'string' && getCustomSet(state, cardOrKey));
@@ -800,12 +809,12 @@
     }
     var db = setsDB(), info = null;
     if (db) {
-      if (setId) info = db.byId(setId);
-      if (!info && name) info = db.byName(name);
-      if (!info && typeof cardOrKey === 'string') info = db.byId(key) || db.byName(key);
+      if (setId) info = db.byId(setId, language);
+      if (!info && name) info = db.byName(name, language);
+      if (!info && typeof cardOrKey === 'string') info = db.byId(key, language) || db.byName(key, language);
     }
     if (info) {
-      return { key: info.id, id: info.id, name: info.name, total: info.total,
+      return { key: (language === 'jp' || language === 'ja' ? 'ja:' : '') + info.id, id: info.id, name: info.name, total: info.total,
         official: info.official, year: info.year == null ? null : info.year, source: 'db' };
     }
     var csByName = name && customSetByName(state, name);
@@ -814,6 +823,7 @@
       return { key: c1.id, id: c1.id, name: c1.name, total: c1.total, official: c1.official,
         year: c1.year, note: c1.note, source: 'custom', custom: true };
     }
+    if ((language === 'jp' || language === 'ja') && key) key = 'ja:' + key;
     if (key && state.setTotals && state.setTotals[key] != null) {
       var t = Math.floor(Number(state.setTotals[key]));
       if (t > 0) return { key: key, id: null, name: name || key, total: t, official: null, year: null, source: 'manual' };
@@ -1361,6 +1371,47 @@
     return new Blob([arr], { type: mime });
   }
 
+  function isGenericSetName(name) {
+    return /^(?:(?:base|main)\s+)?check\s*list(?:\s+(?:cards?|set))?$/i.test(String(name || '').normalize('NFKC').trim());
+  }
+
+  // Never map CardSight UUIDs to TCGdex IDs, or a Japanese release to an English expansion.
+  function scanSetChoice(state, result) {
+    var names = [result.setName, result.releaseName].filter(function (n) { return n && !isGenericSetName(n); });
+    var db = setsDB(), language = result.language;
+    for (var i = 0; i < names.length; i++) {
+      var cs = customSetByName(state, names[i]);
+      var hit = cs || (db && language && db.byName(names[i], language));
+      if (hit) return { name: hit.name, match: hit };
+    }
+    return { name: names[0] || '', match: null };
+  }
+
+  function sameCardIdentity(card, candidate) {
+    function norm(v) { return String(v || '').normalize('NFKC').trim().toLowerCase(); }
+    function number(v) { var n = norm(v).split('/')[0]; return /^\d+$/.test(n) ? String(Number(n)) : n; }
+    return norm(card.name) === norm(candidate.name)
+      && number(card.number) === number(candidate.number)
+      && (card.language || 'en') === candidate.language
+      && (candidate.setId && card.setId ? card.setId === candidate.setId : norm(card.set) === norm(candidate.set));
+  }
+
+  function finishFromParallel(name) {
+    var n = String(name || '').normalize('NFKC').toLowerCase().trim();
+    if (/^(?:non[- ]?holo(?:foil)?|normal|regular|standard)$/.test(n)) return { variant: 'Normal', holoPattern: '' };
+    function patternKey(v) { return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/reverse|holofoil|holo|foil/g, '').replace(/[^a-z0-9]/g, ''); }
+    var pattern = '';
+    HOLO_PATTERNS.some(function (p) {
+      if (p !== 'Khác' && patternKey(n) === patternKey(p)) {
+        pattern = p; return true;
+      }
+      return false;
+    });
+    var reverse = /reverse|mirror|pok[eé]\s*ball|master\s*ball/.test(n);
+    var variant = reverse ? 'Reverse Holo' : (pattern || /^(?:holo|holofoil|foil)$/.test(n) ? 'Holo' : '');
+    return { variant: variant, holoPattern: pattern };
+  }
+
   // Chuẩn hóa response CardSight về các trường app dùng. Response gốc:
   // { success, requestId, detections: [{ confidence, card: { name, number, year,
   //   releaseName, setName, fields: [{key, value}] (CARD_LANGUAGE, Rarity...),
@@ -1379,15 +1430,15 @@
     if (Array.isArray(card.fields)) card.fields.forEach(function (f) { if (f && f.key) fields[String(f.key).toUpperCase()] = s(f.value); });
     var lang = '';
     var lc = s(fields.CARD_LANGUAGE).toLowerCase();
-    if (lc === 'ja' || lc === 'jp') lang = 'jp';
-    else if (lc === 'en') lang = 'en';
+    if (/^(ja|jp|ja-jp|japanese|日本語)$/.test(lc)) lang = 'jp';
+    else if (/^(en|en-us|en-gb|english)$/.test(lc)) lang = 'en';
     else if (lc) lang = 'other';
-    var foil = false, parallelName = '';
-    if (Array.isArray(card.parallelSuggestions) && card.parallelSuggestions.length) {
-      parallelName = s(card.parallelSuggestions[0].name);
-      foil = /holo|foil/i.test(parallelName);
-    }
-    if (card.parallel && card.parallel.name) { parallelName = s(card.parallel.name); foil = /holo|foil/i.test(parallelName); }
+    var suggestions = Array.isArray(card.parallelSuggestions) ? card.parallelSuggestions.filter(function (p) { return p && p.name; }) : [];
+    var parallelName = suggestions.map(function (p) { return s(p.name); }).join(' / ');
+    // CardSight documents confidence per suggestion; array position alone is not confirmation.
+    var confirmed = suggestions.length === 1 && s(suggestions[0].confidence).toLowerCase() === 'high' ? suggestions[0] : null;
+    if (card.parallel && card.parallel.name) { confirmed = card.parallel; parallelName = s(card.parallel.name); }
+    var finish = finishFromParallel(confirmed ? confirmed.name : '');
     var graded = null;
     if (det.grading && det.grading.company && det.grading.grade) {
       graded = {
@@ -1402,13 +1453,15 @@
     return {
       name: s(card.name),
       number: num,
-      setName: s(card.setName || card.releaseName),
+      setName: !isGenericSetName(card.setName) && s(card.setName) ? s(card.setName) : (!isGenericSetName(card.releaseName) ? s(card.releaseName) : ''),
+      sourceSetName: s(card.setName),
       releaseName: s(card.releaseName),
       setCode: '',
       series: s(card.releaseName),
       year: s(card.year),
       language: lang,
-      foil: foil,
+      foil: finish.variant === 'Holo' || finish.variant === 'Reverse Holo',
+      variant: finish.variant, holoPattern: finish.holoPattern,
       parallel: parallelName,
       rarity: s(fields.RARITY),
       confidence: s(det.confidence),
@@ -1568,6 +1621,7 @@
     saveMarketPrices: saveMarketPrices, addManualPrice: addManualPrice,
     sourceLabel: sourceLabel,
     condLabel: condLabel,
+    isGenericSetName: isGenericSetName, scanSetChoice: scanSetChoice, sameCardIdentity: sameCardIdentity, finishFromParallel: finishFromParallel,
     parseCardNumber: parseCardNumber, resolveSet: resolveSet, isSecretCard: isSecretCard,
     setGroups: setGroups, setProgress: setProgress, setManualTotal: setManualTotal,
     yearGroups: yearGroups, groupLanguage: groupLanguage,
