@@ -27,8 +27,8 @@
   root.PRICE_SOURCE_DEFS = [
     { key: 'cardmarket', label: 'Cardmarket', auto: 'tcgdex' }, // auto qua TCGdex pricing
     { key: 'tcgplayer',  label: 'TCGplayer',  auto: 'tcgdex' }, // auto qua TCGdex pricing
-    { key: 'ebay',       label: 'eBay',       auto: 'ebay', comingSoon: true,
-      note: 'Chờ eBay duyệt App ID (dev kavie2004)' },
+    // eBay: Zac chốt bỏ 2026-10-21 (đăng ký eBay Developer bị reject) — không còn
+    // nguồn giá eBay. Kênh BÁN "ebay" trong Đơn hàng là chuyện khác, vẫn giữ.
     { key: 'other',      label: 'Khác',       auto: null }      // chỉ nhập tay
   ];
 })(typeof window !== 'undefined' ? window : globalThis);

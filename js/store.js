@@ -880,7 +880,6 @@
     return [
       { key: 'cardmarket', label: 'Cardmarket', auto: 'tcgdex' },
       { key: 'tcgplayer', label: 'TCGplayer', auto: 'tcgdex' },
-      { key: 'ebay', label: 'eBay', auto: 'ebay', comingSoon: true },
       { key: 'other', label: 'Khác', auto: null }
     ];
   }
