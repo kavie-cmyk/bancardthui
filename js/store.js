@@ -1388,10 +1388,13 @@
     schedulePushCardSightKeys();
   }
 
-  // ---- Đồng bộ key CardSight theo TÀI KHOẢN (bảng user_settings) ----
-  // Trước đây key chỉ nằm ở localStorage của từng trình duyệt: đăng nhập
-  // bằng điện thoại là không có key. Nay key đi theo tài khoản đăng nhập —
-  // máy nào đăng nhập cũng tự nhận key; localStorage chỉ còn là bộ đệm.
+  // ---- Đồng bộ key CardSight DÙNG CHUNG cho cả store (bảng user_settings) ----
+  // Key là của shop, không của riêng ai: mọi tài khoản đăng nhập được vào
+  // app đều dùng chung một bộ key, lưu ở một dòng cố định (STORE_SETTINGS_ID)
+  // thay vì theo từng user. Trước đó nữa key chỉ nằm ở localStorage của
+  // từng trình duyệt (đăng nhập điện thoại là mất key) — localStorage giờ
+  // chỉ còn là bộ đệm. Policy trên DB cho mọi user đã đăng nhập đọc/ghi
+  // dòng chung này; người lạ (chưa đăng nhập) bị chặn hoàn toàn.
   function currentUserId() {
     try {
       var t = root.BCTAuth && root.BCTAuth.accessToken ? root.BCTAuth.accessToken() : null;
@@ -1405,33 +1408,47 @@
       return JSON.parse(json).sub || null;
     } catch (e) { return null; }
   }
+  // Dòng cài đặt chung của cả app kho — mọi tài khoản đăng nhập đều đọc/ghi
+  // dòng này, nên key ở tài khoản nào thêm vào thì tài khoản khác cũng thấy.
+  var STORE_SETTINGS_ID = '00000000-0000-0000-0000-0000000000a1';
   var _csPushTimer = null;
   function pushCardSightKeys() {
-    var uid = currentUserId();
-    if (!uid || typeof SB === 'undefined' || !SB || !SB.upsert) return;
+    if (!root.BCTAuth || !root.BCTAuth.isLoggedIn || !root.BCTAuth.isLoggedIn()) return;
+    if (typeof SB === 'undefined' || !SB || !SB.upsert) return;
     SB.upsert('user_settings',
-      [{ user_id: uid, cardsight_keys: getCardSightKeys(), updated_at: new Date().toISOString() }],
+      [{ user_id: STORE_SETTINGS_ID, cardsight_keys: getCardSightKeys(), updated_at: new Date().toISOString() }],
       'user_id').catch(function () { /* bảng chưa tạo/offline: để lần sau */ });
   }
   function schedulePushCardSightKeys() {
     if (_csPushTimer) clearTimeout(_csPushTimer);
     _csPushTimer = setTimeout(pushCardSightKeys, 700);
   }
+  async function fetchSettingsKeys(rowId) {
+    var rows = await SB.q('user_settings', { select: 'cardsight_keys', eq: { user_id: rowId }, limit: 1 });
+    return (rows && rows[0] && Array.isArray(rows[0].cardsight_keys))
+      ? rows[0].cardsight_keys.filter(function (x) { return x && x.token; }) : null;
+  }
+  function adoptServerKeys(list) {
+    var active = getCardSightKey();
+    _csKeysMem = list;
+    _lsSet(CS_KEYS, JSON.stringify(list));
+    if (!list.some(function (x) { return x.token === active; })) setCardSightKey(list[0].token);
+  }
   async function syncCardSightKeys() {
-    var uid = currentUserId();
-    if (!uid || typeof SB === 'undefined' || !SB || !SB.q) return;
+    if (!root.BCTAuth || !root.BCTAuth.isLoggedIn || !root.BCTAuth.isLoggedIn()) return;
+    if (typeof SB === 'undefined' || !SB || !SB.q) return;
     try {
-      var rows = await SB.q('user_settings', { select: 'cardsight_keys', eq: { user_id: uid }, limit: 1 });
-      var serverList = (rows && rows[0] && Array.isArray(rows[0].cardsight_keys))
-        ? rows[0].cardsight_keys.filter(function (x) { return x && x.token; }) : null;
-      if (serverList && serverList.length) {
-        var active = getCardSightKey();
-        _csKeysMem = serverList;
-        _lsSet(CS_KEYS, JSON.stringify(serverList));
-        if (!serverList.some(function (x) { return x.token === active; })) setCardSightKey(serverList[0].token);
-      } else if (getCardSightKeys().length) {
-        pushCardSightKeys(); // lần đầu: đẩy key đang có trên máy này lên tài khoản
+      var shared = await fetchSettingsKeys(STORE_SETTINGS_ID);
+      if (shared && shared.length) { adoptServerKeys(shared); return; }
+      // Chuyển nhà từ bản đồng bộ theo từng tài khoản (bản s): nếu key đã
+      // từng được đẩy lên theo user id của chính người này thì nhận về rồi
+      // đưa vào kho chung cho mọi tài khoản cùng dùng.
+      var myId = currentUserId();
+      if (myId && myId !== STORE_SETTINGS_ID) {
+        var mine = await fetchSettingsKeys(myId);
+        if (mine && mine.length) { adoptServerKeys(mine); pushCardSightKeys(); return; }
       }
+      if (getCardSightKeys().length) pushCardSightKeys(); // máy này có key → đưa vào kho chung
     } catch (e) { /* chưa có bảng user_settings: dùng localStorage như cũ */ }
   }
   function addCardSightKey(label, token) {
