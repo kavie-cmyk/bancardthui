@@ -1151,6 +1151,45 @@
     } catch (e) {}
     return t;
   }
+  // Danh sách nhiều token (mỗi token 1 tài khoản Ximilar). Token đang dùng vẫn
+  // nằm ở key bct_ximilar_token như cũ; danh sách nằm ở key riêng bên dưới.
+  var XIMILAR_TOKENS_KEY = 'bct_ximilar_tokens';
+  var _ximilarTokensMem = null;
+  function _lsGet(k) { try { if (typeof localStorage !== 'undefined' && localStorage) return localStorage.getItem(k); } catch (e) {} return null; }
+  function _lsSet(k, v) { try { if (typeof localStorage !== 'undefined' && localStorage) { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } } catch (e) {} }
+  function getXimilarTokens() {
+    var list = null;
+    var raw = _lsGet(XIMILAR_TOKENS_KEY);
+    if (raw) { try { list = JSON.parse(raw); } catch (e) { list = null; } }
+    if (!Array.isArray(list)) list = _ximilarTokensMem;
+    if (!Array.isArray(list)) list = [];
+    var legacy = getXimilarToken();
+    if (!list.length && legacy) list = [{ label: 'Token 1', token: legacy }];
+    return list.filter(function (x) { return x && x.token; });
+  }
+  function saveXimilarTokens(list) {
+    _ximilarTokensMem = list;
+    _lsSet(XIMILAR_TOKENS_KEY, JSON.stringify(list));
+  }
+  function addXimilarToken(label, token) {
+    token = String(token || '').trim();
+    if (!token) throw new Error('Chưa dán token.');
+    var list = getXimilarTokens();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].token === token) { setXimilarToken(token); return list; }
+    }
+    list.push({ label: String(label || '').trim() || ('Token ' + (list.length + 1)), token: token });
+    saveXimilarTokens(list);
+    setXimilarToken(token);
+    return list;
+  }
+  function removeXimilarToken(token) {
+    var list = getXimilarTokens().filter(function (x) { return x.token !== token; });
+    saveXimilarTokens(list);
+    if (getXimilarToken() === token) setXimilarToken(list.length ? list[0].token : '');
+    return list;
+  }
+
   function ximilarUrl() {
     var g = (typeof window !== 'undefined') ? window : globalThis;
     return (g && g.XIMILAR_TCG_ID_URL) || 'https://api.ximilar.com/collectibles/v2/tcg_id';
@@ -1361,6 +1400,7 @@
     listingsOfCard: listingsOfCard, getListing: getListing,
     createListing: createListing, updateListing: updateListing, deleteListing: deleteListing,
     getXimilarToken: getXimilarToken, setXimilarToken: setXimilarToken,
+    getXimilarTokens: getXimilarTokens, addXimilarToken: addXimilarToken, removeXimilarToken: removeXimilarToken,
     identifyCardByPhoto: identifyCardByPhoto, parseXimilarResult: parseXimilarResult,
     wipeAll: wipeAll, reseed: reseed, exportJSON: exportJSON
   };

@@ -487,3 +487,7 @@ a.num-cell.missing:hover .num-add { opacity: 1; }
 .scan-name { font-size: 19px; font-weight: 800; }
 .scan-meta { color: var(--muted); margin-top: 4px; }
 .scan-meta.warn { color: var(--gold-soft); }
+.xim-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.xim-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--line-soft); border-radius: 10px; padding: 8px 12px; }
+.xim-label { font-weight: 700; }
+.xim-mask { color: var(--muted); font-family: monospace; }

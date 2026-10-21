@@ -1249,19 +1249,27 @@
   /* ================= VIEW: QUÉT THẺ (nhận diện từ ảnh — Ximilar) ================= */
   var scanState = { photo: '', result: null };
   function vQuet() {
-    var token = BCT.getXimilarToken();
+    var tokens = BCT.getXimilarTokens();
+    var active = BCT.getXimilarToken();
     var html = '<h1 class="page-title">Quét thẻ bằng ảnh</h1>' +
       '<p class="page-sub">Chụp hoặc tải ảnh 1 lá → AI (Ximilar) nhận diện tên, set, số thứ tự → bạn kiểm tra lại rồi lưu vào kho kèm lô nhập. Mỗi lần nhận diện tốn 10 credits trong tài khoản Ximilar.</p>';
-    if (!token) {
-      html += '<section class="panel"><h3 style="margin-top:0">Bước 1: gắn API token (chỉ làm 1 lần)</h3>' +
-        '<p class="panel-note">Đăng ký tài khoản free tại <b>app.ximilar.com</b> (không cần thẻ thanh toán), vào mục API của tài khoản để lấy <b>API token</b> rồi dán vào đây. Token chỉ lưu trong trình duyệt này — không đưa lên GitHub, không ai khác thấy được.</p>' +
-        '<div class="form-grid"><div class="field wide"><label>API token của Ximilar</label><input type="password" id="xim-token" placeholder="Dán API token vào đây" autocomplete="off"></div></div>' +
-        '<div class="form-actions"><button type="button" class="btn" id="xim-save">Lưu token</button></div></section>';
-      return html;
+    html += '<section class="panel"><h3 style="margin-top:0">API token Ximilar' + (tokens.length ? ' (' + tokens.length + ' token)' : '') + '</h3>';
+    if (tokens.length) {
+      html += '<div class="xim-list">' + tokens.map(function (t, i) {
+        var isActive = t.token === active;
+        return '<div class="xim-row"><span class="xim-label">' + esc(t.label) + '</span><span class="xim-mask">••••' + esc(t.token.slice(-4)) + '</span>' +
+          (isActive ? '<span class="tag ok">Đang dùng</span>' : '<button type="button" class="btn secondary btn-sm" data-xim-use="' + i + '">Dùng token này</button>') +
+          '<button type="button" class="btn secondary btn-sm" data-xim-del="' + i + '">Xóa</button></div>';
+      }).join('') + '</div>';
+    } else {
+      html += '<p class="panel-note">Chưa có token nào. Đăng ký tài khoản free tại <b>app.ximilar.com</b> (không cần thẻ thanh toán), vào mục API của tài khoản để lấy <b>API token</b> rồi dán vào đây.</p>';
     }
-    html += '<section class="panel"><div class="panel-head"><h3 style="margin:0">API Ximilar</h3><span class="tag ok">Đã gắn token</span></div>' +
-      '<p class="panel-note">Đổi máy hoặc đổi trình duyệt sẽ phải dán lại token. <button type="button" class="btn secondary btn-sm" id="xim-clear">Xóa token khỏi máy này</button></p></section>';
-    html += '<section class="panel"><h3 style="margin-top:0">Bước 2: chọn ảnh lá bài</h3>' +
+    html += '<div class="form-grid"><div class="field"><label>Tên gợi nhớ</label><input id="xim-label" placeholder="vd Tài khoản chính"></div>' +
+      '<div class="field"><label>API token</label><input type="password" id="xim-token" placeholder="Dán API token" autocomplete="off"></div></div>' +
+      '<div class="form-actions"><button type="button" class="btn" id="xim-save">' + (tokens.length ? 'Thêm token' : 'Lưu token') + '</button></div>' +
+      '<p class="panel-note">Có thể lưu nhiều token (nhiều tài khoản) và chuyển qua lại. Token chỉ lưu trong trình duyệt này — không đưa lên GitHub, không ai khác thấy được. Đổi máy hoặc đổi trình duyệt sẽ phải dán lại.</p></section>';
+    if (!active) return html;
+    html += '<section class="panel"><h3 style="margin-top:0">Chọn ảnh lá bài</h3>' +
       '<label class="img-drop" id="scan-drop">📷 Chụp / chọn ảnh lá bài<input type="file" id="scan-file" accept="image/*" hidden></label>' +
       '<div id="scan-preview"></div>' +
       '<div class="form-actions"><button type="button" class="btn" id="scan-go" disabled>Nhận diện lá này (10 credits)</button></div>' +
@@ -1717,18 +1725,29 @@
     if (base === 'quet') {
       var xSave = $('xim-save');
       if (xSave) xSave.addEventListener('click', function () {
-        var t = ($('xim-token').value || '').trim();
-        if (!t) { toast('Chưa dán token.', 'err'); return; }
-        BCT.setXimilarToken(t);
-        toast('Đã lưu token Ximilar trên trình duyệt này.');
-        render();
+        try {
+          BCT.addXimilarToken($('xim-label').value, $('xim-token').value);
+          toast('Đã lưu token và đặt làm token đang dùng.');
+          render();
+        } catch (err) { toast(err.message, 'err'); }
       });
-      var xClear = $('xim-clear');
-      if (xClear) xClear.addEventListener('click', function () {
-        BCT.setXimilarToken('');
-        scanState = { photo: '', result: null };
-        toast('Đã xóa token khỏi máy này.');
-        render();
+      Array.prototype.forEach.call(document.querySelectorAll('[data-xim-use]'), function (btn) {
+        btn.addEventListener('click', function () {
+          var list = BCT.getXimilarTokens();
+          var t = list[Number(btn.getAttribute('data-xim-use'))];
+          if (t) { BCT.setXimilarToken(t.token); toast('Đã chuyển sang token "' + t.label + '".'); render(); }
+        });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-xim-del]'), function (btn) {
+        btn.addEventListener('click', function () {
+          var list = BCT.getXimilarTokens();
+          var t = list[Number(btn.getAttribute('data-xim-del'))];
+          if (!t) return;
+          if (!confirm('Xóa token "' + t.label + '" khỏi máy này?')) return;
+          BCT.removeXimilarToken(t.token);
+          toast('Đã xóa token "' + t.label + '".');
+          render();
+        });
       });
       var scanFile = $('scan-file');
       if (scanFile) scanFile.addEventListener('change', function () {
