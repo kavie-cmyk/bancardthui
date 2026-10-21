@@ -272,23 +272,6 @@
 
   // ---------- load ----------
   // Cờ "đã qua lần nạp mẫu đầu tiên / đã xóa mẫu" — lưu local.
-  // Không có cờ này, load() sẽ nạp lại dữ liệu mẫu MỖI lần kho trống,
-  // kể cả khi user đã chủ động xóa mẫu để bắt đầu kho thật.
-  var SEED_DONE_KEY = 'bct_seed_done_v1';
-  var _seedDoneMem = false;
-  function seedDone() {
-    try {
-      if (typeof localStorage !== 'undefined' && localStorage) return localStorage.getItem(SEED_DONE_KEY) === '1';
-    } catch (e) { /* private mode / node */ }
-    return _seedDoneMem;
-  }
-  function markSeedDone() {
-    _seedDoneMem = true;
-    try {
-      if (typeof localStorage !== 'undefined' && localStorage) localStorage.setItem(SEED_DONE_KEY, '1');
-    } catch (e) {}
-  }
-
   function blankState() {
     return { cards: [], lots: [], orders: [], setTotals: {}, customSets: [], listings: [] };
   }
@@ -318,13 +301,6 @@
     state.listings = listings.map(mapListing);
     totals.forEach(function (r) { state.setTotals[r.set_key] = r.total; });
 
-    // Chỉ tự nạp dữ liệu mẫu ở lần mở ĐẦU TIÊN (chưa từng seed / chưa từng xóa mẫu).
-    // Kho trống do user chủ động xóa mẫu thì giữ nguyên trống.
-    if (!state.cards.length && !seedDone() && root.BCT_SEED && root.BCT_SEED.buildSeed) {
-      state = await root.BCT_SEED.buildSeed(state);
-      state._justSeeded = true; // UI dùng để hiện nút "Xóa dữ liệu mẫu"
-      markSeedDone();
-    }
     return state;
   }
 
@@ -1249,7 +1225,7 @@
     return saveMarketPrices(state, cardId, srcs);
   }
 
-  // ---------- wipe / reseed / export ----------
+  // ---------- wipe / export ----------
   // Xóa toàn bộ dữ liệu (thứ tự an toàn FK). Trả về state trống.
   // ---------- CardSight AI: nhận diện thẻ từ ảnh (view Quét thẻ) ----------
   // Đã thay Ximilar (2026-10-21): Ximilar bắt tối thiểu gói Business mới cho gọi
@@ -1545,18 +1521,7 @@
     await SB.delAll('cards', 'id');
     await SB.delAll('custom_sets', 'id');
     await SB.delAll('set_totals', 'set_key');
-    markSeedDone(); // xóa sạch là chủ động bắt đầu kho trống — không tự nạp lại mẫu khi tải lại trang
     return blankState();
-  }
-
-  async function reseed() {
-    await wipeAll();
-    var state = blankState();
-    if (root.BCT_SEED && root.BCT_SEED.buildSeed) {
-      state = await root.BCT_SEED.buildSeed(state);
-    }
-    markSeedDone();
-    return state;
   }
 
   async function exportJSON() {
@@ -1616,7 +1581,7 @@
     getCardSightKeys: getCardSightKeys, addCardSightKey: addCardSightKey, removeCardSightKey: removeCardSightKey,
     syncCardSightKeys: syncCardSightKeys,
     identifyCardByPhoto: identifyCardByPhoto, parseCardSightResult: parseCardSightResult,
-    wipeAll: wipeAll, reseed: reseed, exportJSON: exportJSON
+    wipeAll: wipeAll, exportJSON: exportJSON
   };
 
   root.BCT = BCT;

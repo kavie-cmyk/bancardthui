@@ -23,7 +23,7 @@
 
   /* ---------- auth: magic link ---------- */
   function chromeVisible(on) {
-    ['nav', 'seed-pill', 'btn-seed-toggle', 'btn-export', 'btn-logout'].forEach(function (id) {
+    ['nav', 'btn-export', 'btn-logout'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.hidden = !on;
     });
@@ -111,7 +111,6 @@
     showLoading(true);
     try {
       S = await BCT.load();
-      if (S._justSeeded) setSeededUI(true);
       if (BCT.syncCardSightKeys) { try { await BCT.syncCardSightKeys(); } catch (e) {} }
     } catch (e) {
       showLoading(false);
@@ -165,15 +164,6 @@
     showLoading(true);
     try { return await fn(); }
     finally { showLoading(false); }
-  }
-
-  /* ---------- cờ dữ liệu mẫu (chỉ UI, lưu local) ---------- */
-  var SEED_FLAG = 'bct_seed_ui';
-  function isSeededUI() {
-    try { return localStorage.getItem(SEED_FLAG) === '1'; } catch (e) { return false; }
-  }
-  function setSeededUI(v) {
-    try { if (v) localStorage.setItem(SEED_FLAG, '1'); else localStorage.removeItem(SEED_FLAG); } catch (e) {}
   }
 
   /* ---------- ảnh: fallback chain TCGdex CDN → placeholder ---------- */
@@ -237,31 +227,6 @@
       return '<a href="' + n.path + '" class="' + (on ? 'active' : '') + '">' + '<img class="rs-nav-icon" src="assets/hoenn/' + rsIcons[i] + '.png" alt="" width="32" height="32" loading="lazy">' + n.icon + n.label + '</a>';
     }).join('');
     document.getElementById('brand-icon').innerHTML = IC.card;
-    var pill = document.getElementById('seed-pill');
-    var btn = document.getElementById('btn-seed-toggle');
-    if (isSeededUI()) {
-      pill.hidden = false; btn.hidden = false; btn.textContent = 'Xóa dữ liệu mẫu';
-      btn.onclick = function () {
-        if (!confirm('Xóa toàn bộ dữ liệu mẫu và bắt đầu kho trống?')) return;
-        withLoading(async function () {
-          S = await BCT.wipeAll();
-          setSeededUI(false);
-          toast('Đã xóa dữ liệu mẫu.');
-          location.hash = '#/dashboard'; render();
-        }).catch(function (err) { toast(err.message); });
-      };
-    } else {
-      pill.hidden = true; btn.hidden = false; btn.textContent = 'Nạp dữ liệu mẫu';
-      btn.onclick = function () {
-        if (!confirm('Nạp bộ dữ liệu mẫu (9 card, 10 đơn)? Dữ liệu hiện tại sẽ bị thay thế.')) return;
-        withLoading(async function () {
-          S = await BCT.reseed();
-          setSeededUI(true);
-          toast('Đã nạp dữ liệu mẫu.');
-          location.hash = '#/dashboard'; render();
-        }).catch(function (err) { toast(err.message); });
-      };
-    }
   }
 
   /* ---------- router ---------- */

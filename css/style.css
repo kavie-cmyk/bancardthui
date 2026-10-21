@@ -74,11 +74,6 @@ body {
 .nav a:hover { color: var(--ink); background: rgba(255,255,255,0.04); }
 .nav a.active { color: var(--gold-soft); background: rgba(232,180,74,0.09); border-color: var(--line); }
 
-.seed-pill {
-  font-size: 11px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase;
-  color: var(--gold); border: 1px dashed var(--gold-dim); border-radius: 999px;
-  padding: 5px 11px; white-space: nowrap;
-}
 .btn-ghost {
   background: transparent; color: var(--muted); border: 1px solid var(--line-soft);
   border-radius: 9px; padding: 7px 12px; font-size: 13px; cursor: pointer; font-family: var(--font-body);
@@ -501,7 +496,6 @@ a.num-cell.missing:hover .num-add { opacity: 1; }
   .brand-mark { width: 30px; height: 30px; border-radius: 8px; }
   .topbar .btn-ghost { padding: 6px 8px; font-size: 12.5px; }
   .ball-toggle { width: 30px; height: 30px; }
-  .seed-pill { font-size: 10px; padding: 4px 8px; }
   .nav a { padding: 7px 10px; font-size: 13.5px; }
   .page-title { font-size: 24px; }
   .page-sub { font-size: 13px; }
