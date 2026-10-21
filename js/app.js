@@ -1257,7 +1257,7 @@
     if (tokens.length) {
       html += '<div class="cs-list">' + tokens.map(function (t, i) {
         var isActive = t.token === active;
-        return '<div class="cs-row"><span class="cs-label">' + esc(t.label) + '</span><span class="cs-mask">••••' + esc(t.token.slice(-4)) + '</span>' +
+        return '<div class="cs-row"><span class="cs-label">' + BCT.esc(t.label) + '</span><span class="cs-mask">••••' + BCT.esc(t.token.slice(-4)) + '</span>' +
           (isActive ? '<span class="tag ok">Đang dùng</span>' : '<button type="button" class="btn secondary btn-sm" data-cs-use="' + i + '">Dùng key này</button>') +
           '<button type="button" class="btn secondary btn-sm" data-cs-del="' + i + '">Xóa</button></div>';
       }).join('') + '</div>';
@@ -1282,24 +1282,24 @@
     var tmpCard = { setId: matched ? matched.id : '', number: res.number || '', name: res.name || '', images: [] };
     var variantOpts = BCT.VARIANTS.map(function (v) {
       var sel = res.foil && v === 'Holo' ? ' selected' : (!res.foil && v === 'Normal' ? ' selected' : '');
-      return '<option value="' + esc(v) + '"' + sel + '>' + esc((BCT.VARIANT_LABELS && BCT.VARIANT_LABELS[v]) || v) + '</option>';
+      return '<option value="' + BCT.esc(v) + '"' + sel + '>' + BCT.esc((BCT.VARIANT_LABELS && BCT.VARIANT_LABELS[v]) || v) + '</option>';
     }).join('');
-    var rarOpts = BCT.RARITIES.map(function (r) { return '<option value="' + esc(r) + '"' + (res.rarity && r.toLowerCase() === String(res.rarity).toLowerCase() ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join('');
-    var condOpts = BCT.CONDITIONS.map(function (cd) { return '<option' + (cd === 'New Mint' ? ' selected' : '') + '>' + esc(cd) + '</option>'; }).join('');
+    var rarOpts = BCT.RARITIES.map(function (r) { return '<option value="' + BCT.esc(r) + '"' + (res.rarity && r.toLowerCase() === String(res.rarity).toLowerCase() ? ' selected' : '') + '>' + BCT.esc(r) + '</option>'; }).join('');
+    var condOpts = BCT.CONDITIONS.map(function (cd) { return '<option' + (cd === 'New Mint' ? ' selected' : '') + '>' + BCT.esc(cd) + '</option>'; }).join('');
     var today = new Date(); var pad = function (n) { return (n < 10 ? '0' : '') + n; };
     var todayStr = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
     var html = '<div class="scan-found"><div class="scan-thumb">' + cardImgTag(tmpCard, res.name) + '</div><div>' +
-      '<div class="scan-name">' + esc(res.name) + '</div>' +
-      '<div class="scan-meta">' + esc([res.setName, res.number ? 'số ' + res.number : '', res.year, res.series].filter(Boolean).join(' · ')) + '</div>' +
-      (matched ? '<div class="scan-meta">Khớp set trong dữ liệu: <b>' + esc(matched.name) + '</b> — ảnh chính thức sẽ tự hiển thị.</div>'
-               : '<div class="scan-meta warn">Chưa khớp được set "' + esc(res.setName || '?') + '" với dữ liệu TCGdex — kiểm tra lại tên set ở form dưới, hoặc lá này sẽ dùng ảnh chụp làm ảnh chính.</div>') +
-      (res.confidence ? '<div class="scan-meta">Độ tin cậy của AI: <b>' + esc(res.confidence) + '</b>' + (res.alternatives ? ' · có ' + res.alternatives + ' phương án khác — nếu thấy sai, sửa thẳng ở form dưới' : '') + (res.parallel ? ' · Biến thể gợi ý: ' + esc(res.parallel) : '') + '</div>' : '') +
-      (res.graded ? '<div class="scan-meta">Lá đang trong slab: <b>' + esc(res.graded.org) + ' ' + esc(res.graded.score) + '</b>' + (res.graded.cert ? ' · cert ' + esc(res.graded.cert) : '') + ' — thông tin này sẽ tự lưu kèm card.</div>' : '') +
+      '<div class="scan-name">' + BCT.esc(res.name) + '</div>' +
+      '<div class="scan-meta">' + BCT.esc([res.setName, res.number ? 'số ' + res.number : '', res.year, res.series].filter(Boolean).join(' · ')) + '</div>' +
+      (matched ? '<div class="scan-meta">Khớp set trong dữ liệu: <b>' + BCT.esc(matched.name) + '</b> — ảnh chính thức sẽ tự hiển thị.</div>'
+               : '<div class="scan-meta warn">Chưa khớp được set "' + BCT.esc(res.setName || '?') + '" với dữ liệu TCGdex — kiểm tra lại tên set ở form dưới, hoặc lá này sẽ dùng ảnh chụp làm ảnh chính.</div>') +
+      (res.confidence ? '<div class="scan-meta">Độ tin cậy của AI: <b>' + BCT.esc(res.confidence) + '</b>' + (res.alternatives ? ' · có ' + res.alternatives + ' phương án khác — nếu thấy sai, sửa thẳng ở form dưới' : '') + (res.parallel ? ' · Biến thể gợi ý: ' + BCT.esc(res.parallel) : '') + '</div>' : '') +
+      (res.graded ? '<div class="scan-meta">Lá đang trong slab: <b>' + BCT.esc(res.graded.org) + ' ' + BCT.esc(res.graded.score) + '</b>' + (res.graded.cert ? ' · cert ' + BCT.esc(res.graded.cert) : '') + ' — thông tin này sẽ tự lưu kèm card.</div>' : '') +
       '</div></div>';
     html += '<form id="f-scan"><div class="form-grid">' +
-      fld('Tên lá *', '<input id="s-name" required value="' + esc(res.name) + '">') +
-      fld('Set (gõ để chọn)', '<input id="s-setname" list="set-list" value="' + esc(matched ? matched.name : (res.setName || '')) + '" placeholder="Tên set"><datalist id="set-list">' + setDatalistOptions() + '</datalist>') +
-      fld('Số thứ tự', '<input id="s-number" value="' + esc(res.number || '') + '" placeholder="vd 025/165">') +
+      fld('Tên lá *', '<input id="s-name" required value="' + BCT.esc(res.name) + '">') +
+      fld('Set (gõ để chọn)', '<input id="s-setname" list="set-list" value="' + BCT.esc(matched ? matched.name : (res.setName || '')) + '" placeholder="Tên set"><datalist id="set-list">' + setDatalistOptions() + '</datalist>') +
+      fld('Số thứ tự', '<input id="s-number" value="' + BCT.esc(res.number || '') + '" placeholder="vd 025/165">') +
       fld('Ngôn ngữ', '<select id="s-lang"><option value="en"' + (res.language === 'en' ? ' selected' : '') + '>Tiếng Anh</option><option value="jp"' + (res.language === 'jp' ? ' selected' : '') + '>Tiếng Nhật</option><option value="other"' + (res.language === 'other' ? ' selected' : '') + '>Khác</option></select>') +
       fld('Độ hiếm', '<select id="s-rarity">' + rarOpts + '</select>') +
       fld('Phiên bản', '<select id="s-variant">' + variantOpts + '</select>') +
