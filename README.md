@@ -1,40 +1,87 @@
 # Bán Card Thui — Quản lý kho Pokémon TCG
 
 Web app quản lý kho card Pokémon cá nhân: nhập kho theo lô, bán hàng trừ kho FIFO,
-dashboard lãi/lỗ thực tế. Chạy ngay không cần build step.
+dashboard lãi/lỗ thực tế, bộ sưu tập theo set và quản lý tin rao bán.
+Chạy ngay không cần build step. Dữ liệu lưu trên **Supabase** (Postgres + Storage),
+đăng nhập bằng magic link qua email.
+
+> Bản cũ lưu dữ liệu ở localStorage (key `bct_state_v1`) — đã thay bằng Supabase.
+> Mô tả localStorage trong các bản README trước không còn đúng nữa.
 
 ## Cách chạy
 
-Mở `index.html` bằng trình duyệt (double-click hoặc kéo vào Chrome).
-Lần đầu mở, app tự nạp **dữ liệu mẫu** (8 card, 10 đơn) để xem dashboard sống ngay.
-Nút **"Xóa dữ liệu mẫu"** trên thanh header để bắt đầu kho trống.
+Bản đang dùng: **https://kavie-cmyk.github.io/bancardthui/** (GitHub Pages từ repo này).
 
-> Cần internet cho Google Fonts. Không có mạng vẫn chạy, chỉ rớt về font hệ thống.
+Chạy local để phát triển:
 
-## Data model (localStorage key `bct_state_v1`)
+```bash
+python3 -m http.server 8000
+# mở http://localhost:8000
+```
+
+Nên chạy qua http server thay vì mở thẳng file `index.html`: link đăng nhập (magic link)
+cần một URL khớp với Redirect URL đã cấu hình trong Supabase Auth.
+
+Lần đầu mở (kho đang trống, chưa từng nạp mẫu), app tự nạp **dữ liệu mẫu**
+(9 card, 10 đơn) để xem dashboard sống ngay. Nút **"Xóa dữ liệu mẫu"** trên thanh
+header để bắt đầu kho trống — sau khi đã xóa, app **không** tự nạp lại mẫu khi tải lại
+trang (cờ local `bct_seed_done_v1`). Muốn xem lại mẫu: nút **"Nạp dữ liệu mẫu"**
+(dữ liệu hiện tại sẽ bị thay thế).
+
+Cần internet cho Supabase, Google Fonts và ảnh card từ TCGdex CDN.
+
+## Đăng nhập & backend (Supabase)
+
+- Project Supabase và anon key nằm trong `js/config.js`. Anon key là public theo
+  thiết kế của Supabase — quyền truy cập phải giới hạn bằng **RLS/policies phía server**,
+  không bao giờ dùng `service_role` ở client.
+- `js/auth.js`: đăng nhập magic link (`/auth/v1/otp`, `create_user: false` — chỉ email
+  đã được tạo user sẵn trong Supabase Auth mới đăng nhập được). Session lưu ở
+  localStorage key `bct_session`, tự refresh khi hết hạn / khi gặp HTTP 401.
+- `js/db.js`: wrapper PostgREST + Storage bằng `fetch` thuần: retry khi lỗi mạng
+  (timeout 20s/lần, tối đa 3 lần), gặp 401 thì refresh session 1 lần rồi thử lại.
+- Nếu gặp lỗi kiểu "column ... does not exist" khi chạy với DB chưa migrate đủ cột:
+  `js/store.js` có cơ chế insert/update *tolerant* — tự bỏ các cột "có thể chưa có"
+  (`CARD_MAYBE_COLS`, `LOT_MAYBE_COLS`) và thử lại. Cách xử lý đúng lâu dài vẫn là
+  chạy đủ `supabase/schema.sql` trong SQL Editor.
+
+## Data model (Supabase — xem `supabase/schema.sql`)
 
 | Bảng | Trường chính |
-|---|---|
-| `cards` | id, name, set, setId (tcgdex), number, rarity, condition (NM/LP/MP), graded {org, score}, images[] (dataURL), note |
-| `lots` (inventory_lots) | id, cardId, qty, qtyRemaining, costPerUnit (VND), importDate, source, variant (Normal/Reverse Holo/Holo/1st Edition) |
-| `orders` | id, date, channel (ebay/shopee/facebook/tructiep), items[] {cardId, lotId, qty, sellPrice, costPerUnit}, fees, shippingFee, buyer, note |
-| `setTotals` | {setKey: total} — tổng số lá do user nhập tay cho set không có trong danh sách chuẩn |
-| `customSets` | [{id ('custom-xxx'), name, total, official, year, note, createdAt}] — set do user tự tạo, card.setId trỏ tới đây |
+| --- | --- |
+| `cards` | id, name, `set`, set_id (TCGdex), number, rarity, condition (`New Mint`/`A`/`B`/`C`/`D`), graded_org/graded_score, cert_number, cert_pop, language (`en`/`jp`/`other`), storage_location, misprint, market_price/market_currency/market_source/market_updated_at, price_sources (jsonb) |
+| `inventory_lots` | id, card_id, qty, qty_remaining, cost_per_unit (VND), import_date, source, condition, variant (Normal/Reverse Holo/Holo/1st Edition), holo_pattern |
+| `orders` | id, date, channel (`ebay`/`shopee`/`facebook`/`tructiep`), items (jsonb: card_id, lot_id, qty, sell_price, cost_per_unit), fees, shipping_fee, buyer, note |
+| `card_images` | id, card_id, url, sort_order — ảnh user tự chụp, file nằm ở bucket Storage `card-images` (public) |
+| `custom_sets` | id (`custom-xxx`), name, total, official, year, note |
+| `set_totals` | set_key (PK), total — tổng số lá nhập tay cho set không tra được trong danh sách chuẩn |
+| `listings` | id, card_id, lot_id, price (VND), qty, status (`draft`/`active`/`sold`/`hidden`), channel |
 
-`listings` (rao bán) chưa có UI — dành cho Phase 2, schema đã có trong `supabase/schema.sql`.
+Ảnh card hiển thị theo thứ tự ưu tiên: ảnh user tự chụp (Storage) → ảnh chính thức từ
+TCGdex CDN (dựng từ set_id + số thứ tự + ngôn ngữ) → ảnh placeholder.
+
+## Các view
+
+- **Tổng quan** — KPI kho/doanh thu/lãi, biểu đồ tuần, bán chạy, hàng chậm, sắp hết hàng, hoạt động gần đây.
+- **Kho card** — lọc theo set/độ hiếm/ngôn ngữ/mẫu holo/vị trí lưu trữ, chỉ lá lỗi in, chỉ lá graded; chi tiết từng card (các lô, lịch sử giá bán, giá thị trường, tin rao của lá đó).
+- **Bộ sưu tập** — theo set, checklist (xem mục riêng phía dưới).
+- **Nhập kho** — mỗi lần nhập là 1 lô. Tạo card mới ngay trong form (có cảnh báo nếu trùng tên + số + set với card đã có), hoặc chọn card có sẵn để nhập thêm lô. Ảnh chụp tự nén còn ~800px JPEG trước khi up lên Storage.
+- **Bán hàng** — tạo đơn, xem trước FIFO trước khi chốt.
+- **Rao bán** — quản lý `listings`: tạo tin rao (chặn số lượng vượt tồn kho), đổi trạng thái Nháp / Đang rao / Đã bán / Đã ẩn, xóa tin. Đây là quản lý nội bộ để chuẩn bị bán — chưa phải trang bán hàng công khai.
+- **Đơn hàng** — danh sách + chi tiết từng đơn (trừ đúng lô nào).
 
 ## Bộ sưu tập theo set (view "Bộ sưu tập")
 
-- Danh sách 220 set lấy từ [TCGdex](https://api.tcgdex.net/v2/en/sets) (`js/sets-db.js`, snapshot 2026-10-14), mỗi set có tổng số lá, số lá chính thức và năm phát hành.
+- Danh sách 220 set lấy từ [TCGdex](https://api.tcgdex.net) (`js/sets-db.js`, snapshot 2026-10-14), mỗi set có tổng số lá, số lá chính thức và năm phát hành.
 - Mỗi set hiện progress bar **số lá unique còn hàng ÷ tổng số lá**, số lá thiếu, tổng thẻ tồn, giá trị kho ước tính.
 - Bấm vào set → **checklist** đánh số 1..tổng: lá đã có sáng + badge số lượng, lá thiếu mờ đi; lá có số vượt số lá chính thức gắn tag **SECRET**.
-- Set không tra được tổng số lá → nhập tay ngay trên thẻ set (lưu vào `setTotals`).
-- Filter theo năm phát hành + chế độ **nhóm theo năm** (mới → cũ).
+- Set không tra được tổng số lá → nhập tay ngay trên thẻ set (lưu vào `set_totals`).
+- Filter theo năm phát hành, ngôn ngữ + chế độ **nhóm theo năm** (mới → cũ).
 - Nút **?** ở đầu trang Kho giải thích ký hiệu độ hiếm (● ◆ ★ …) bằng tiếng Việt.
 
 ### Phiên bản in & checklist 2 chế độ
 
-- Mỗi lô nhập có **phiên bản**: Normal / Reverse Holo / Holo / 1st Edition (chọn lúc nhập kho; dữ liệu cũ mặc định Normal).
+- Mỗi lô nhập có **phiên bản**: Normal / Reverse Holo / Holo / 1st Edition (chọn lúc nhập kho; dữ liệu cũ mặc định Normal). Condition của lô lấy theo condition của card.
 - Tiến độ set tính theo chuẩn **complete set**: 1 số thứ tự chỉ tính 1 lần dù có nhiều bản trùng (badge ×N hiện tổng số bản).
 - Checklist có toggle **Set chuẩn / Master**: Master hiện breakdown phiên bản từng ô (vd "Reverse Holo ×2 · Holo ×1") mà không đổi cách tính tiến độ.
 - Bấm vào ô đã có → panel: xem card đang chiếm ô + variant, nút **Sửa lá**, form **Đổi số/set** (đổi số thứ tự, set, độ hiếm — lô & đơn giữ nguyên), **Gỡ khỏi set**.
@@ -43,10 +90,18 @@ Nút **"Xóa dữ liệu mẫu"** trên thanh header để bắt đầu kho tr�
 ### Set tự tạo (Quản lý set)
 
 - Nút **Quản lý set** ở đầu trang Bộ sưu tập → route `#/sets/manage`.
-- 220 set TCGdex chỉ đọc; chỉ set tự tạo mới thêm/sửa/xóa được (lưu ở `state.customSets`, id dạng `custom-xxx`).
+- 220 set TCGdex chỉ đọc; chỉ set tự tạo mới thêm/sửa/xóa được (lưu ở bảng `custom_sets`, id dạng `custom-xxx`).
 - Thêm/sửa: Tên set (bắt buộc), Năm phát hành (tùy chọn), Tổng số lá (bắt buộc, >0), Số lá chính (bắt buộc, ≤ tổng), Ghi chú. Validate inline.
-- Xóa set đang có card → panel xác nhận, bắt buộc tick "Chuyển N lá sang Chưa phân loại" rồi mới xóa; các card bị gỡ `setId`.
+- Xóa set đang có card → panel xác nhận, bắt buộc tick "Chuyển N lá sang Chưa phân loại" rồi mới xóa; các card bị gỡ `set_id`.
 - Set tự tạo xuất hiện đầu danh sách gợi ý khi nhập set (gắn tag "Tự tạo"), render trong Bộ sưu tập/checklist/lọc năm y như set chuẩn.
+
+## Giá tham khảo thị trường
+
+- Nguồn giá cấu hình ở `js/config.js` → `PRICE_SOURCE_DEFS` (cơ chế pluggable: thêm def + đăng ký fetcher trong `PRICE_FETCHERS` ở `js/store.js`).
+- Đang chạy: **Cardmarket** và **TCGplayer**, tự kéo qua TCGdex pricing theo set_id + số thứ tự.
+- **eBay**: đang chờ eBay duyệt App ID (tài khoản dev `kavie2004`) — `EBAY_APP_ID` còn trống, `fetchEbayPricing` trong `js/store.js` là TODO, nguồn này hiển thị "sắp có". Có App ID thì dán vào `js/config.js` và viết thân hàm fetch.
+- Giá quy đổi về VND bằng tỷ giá ước tính trong `js/config.js` (`EUR_VND`, `USD_VND`, `JPY_VND`) rồi nhân hệ số condition (`CONDITION_FACTOR`: New Mint 1.0 / A 0.9 / B 0.75 / C 0.55 / D 0.35). Đây là giá **tham khảo ước tính**, không phải giá chốt.
+- Nhập giá tay được (nguồn "Khác") và lưu cùng các nguồn tự động trong `cards.price_sources`.
 
 ## FIFO — logic cốt lõi
 
@@ -55,25 +110,35 @@ Nút **"Xóa dữ liệu mẫu"** trên thanh header để bắt đầu kho tr�
 - Lãi/đơn = Σ(qty × giá bán) − Σ(qty × cost lô thực tế) − phí sàn − phí ship.
 - Form Bán hàng có **xem trước FIFO**: hiện sẽ trừ lô nào, cost bao nhiêu, trước khi xác nhận.
 
-## Lưu ý localStorage
+## Sao lưu
 
-- Ảnh card được **nén còn ~800px JPEG q0.8** khi upload → mỗi ảnh ~60–150KB.
-- localStorage giới hạn **~5MB** → chứa được vài chục card có ảnh. Vượt giới hạn app sẽ báo lỗi khi lưu.
-- Dữ liệu chỉ nằm trên trình duyệt này. Muốn dùng nhiều máy → chuyển sang Supabase (schema sẵn trong `supabase/schema.sql`).
+Nút **"Xuất JSON"** trên header tải về toàn bộ dữ liệu (cards, inventory_lots, orders,
+card_images, custom_sets, set_totals, listings) — nên xuất định kỳ, đặc biệt trước khi
+xóa dữ liệu mẫu hoặc migrate DB.
 
 ## Cấu trúc file
 
 ```
 index.html            Khung app + nav
 css/style.css         Theme "collector's vault" (dark ink + amber, grain, foil)
-js/store.js           State, FIFO, tính toán (dùng được cả trong Node để test)
-js/seed.js            Dữ liệu mẫu (dùng đúng logic FIFO thật nên số liệu nhất quán)
-js/app.js             Router + 5 views: Tổng quan / Kho / Nhập kho / Bán hàng / Đơn hàng
-supabase/schema.sql   Schema Supabase cho Phase 2 (cards, inventory_lots, listings, orders, card_images)
+js/config.js          Cấu hình Supabase, tỷ giá, hệ số condition, nguồn giá
+js/auth.js            Magic-link login qua Supabase Auth, quản lý session
+js/db.js              Wrapper Supabase PostgREST + Storage (fetch thuần)
+js/store.js           Lớp dữ liệu + logic nghiệp vụ: FIFO, tính toán, giá, listings (dùng được cả trong Node để test)
+js/seed.js            Dữ liệu mẫu (đi qua đúng logic ghi DB thật nên số liệu nhất quán)
+js/sets-db.js         Snapshot 220 set TCGdex
+js/app.js             Router + views: Tổng quan / Kho / Bộ sưu tập / Nhập kho / Bán hàng / Rao bán / Đơn hàng
+supabase/schema.sql   Toàn bộ schema (bảng, index, ghi chú Storage bucket + RLS)
 ```
 
-## Roadmap Phase 2 — web bán hàng
+## Còn phải làm (Phase 2 — web bán hàng)
 
-1. Tạo project Supabase, chạy `supabase/schema.sql`, tạo bucket `card-images` (public).
-2. Viết script migrate 1 lần: đọc `localStorage.bct_state_v1` → insert vào Supabase.
-3. Web bán hàng (storefront) đọc bảng `listings` + `card_images`, đơn mới ghi vào `orders` — app quản lý này chuyển sang đọc/ghi Supabase thay vì localStorage (giữ nguyên `js/store.js` interface, chỉ thay lớp persistence).
+1. **Storefront công khai**: trang bán hàng đọc `listings` ở trạng thái `active` +
+   `card_images`; đơn mới ghi vào `orders`. App quản lý này đã có sẵn quản lý listings
+   nội bộ, storefront là phần còn thiếu.
+2. **Bật RLS thật**: phần RLS trong `supabase/schema.sql` hiện vẫn là ghi chú/comment.
+   Trước khi mở storefront công khai phải bật RLS + viết policy (chủ shop ghi mọi thứ,
+   khách chỉ đọc listings `active`).
+3. **eBay pricing** khi có App ID (xem mục Giá tham khảo).
+4. Kiểm tra Redirect URL của Supabase Auth khớp mọi domain/localhost đang dùng,
+   nếu không magic link sẽ lỗi khi đăng nhập từ địa chỉ mới.
