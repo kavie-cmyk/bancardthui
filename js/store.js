@@ -1048,6 +1048,29 @@
     ebay: fetchEbayPricing       // slot chờ App ID
   };
 
+  // Dòng chẩn đoán gọn cho bước kéo giá: liệt kê khóa pricing thô mà TCGdex
+  // trả về, để khi trình duyệt của Zac vẫn chỉ ra 1 nguồn thì chụp màn hình
+  // dòng chẩn đoán là thấy ngay phía API trả gì (không cần mở console).
+  function pricingDiagLine(pricing) {
+    if (!pricing || typeof pricing !== 'object') return 'pricing:(trống)';
+    var keys = [];
+    for (var k in pricing) if (Object.prototype.hasOwnProperty.call(pricing, k)) keys.push(k);
+    var s = 'pricing:[' + keys.join(',') + ']';
+    var tp = pricing.tcgplayer || pricing.tcgPlayer;
+    if (tp && typeof tp === 'object') {
+      var tk = [];
+      for (var k2 in tp) {
+        if (!Object.prototype.hasOwnProperty.call(tp, k2)) continue;
+        if (k2 === 'updated' || k2 === 'updatedAt' || k2 === 'unit') continue;
+        tk.push(k2 + (tp[k2] && tp[k2].marketPrice != null ? ':có-mp' : ':không-mp'));
+      }
+      s += ' tcgKeys:[' + tk.join(',') + ']';
+    }
+    return s;
+  }
+  // Kết quả chẩn đoán của lần kéo giá gần nhất (xem BCT.getLastPriceDiag).
+  var lastPriceDiag = null;
+
   // TCGdex: trả về [cardmarket?, tcgplayer?]. Retry + timeout nội bộ.
   // QUAN TRỌNG: localId của TCGdex KHÔNG đệm số 0 ("swsh7-49", không phải
   // "swsh7-049") trong khi app lưu số có đệm ("049") → thử bản không đệm trước,
@@ -1060,6 +1083,11 @@
     candidates.push(raw);
     var lastErr = null;
     var best = null;
+    // Ghi lại từng lần thử để hiển thị dòng chẩn đoán trong app.
+    var diagTries = [];
+    var saveDiag = function () {
+      lastPriceDiag = { card: String(setId).trim() + '-' + raw, tries: diagTries.slice() };
+    };
     for (var c = 0; c < candidates.length; c++) {
       for (var i = 0; i < 3; i++) {
         // URL kèm mã ngẫu nhiên mỗi lần gọi + cache:'no-store' để né mọi lớp
@@ -1069,21 +1097,27 @@
           encodeURIComponent(candidates[c]) + '?cb=' + Date.now() + '_' + i;
         try {
           var res = await fetchWithTimeout(url, { cache: 'no-store' }, 15000);
-          if (res.status === 404) break; // thử dạng số kế tiếp
+          if (res.status === 404) {
+            diagTries.push(candidates[c] + ' → HTTP 404');
+            break; // thử dạng số kế tiếp
+          }
           if (!res.ok) throw new Error('TCGdex API lỗi HTTP ' + res.status);
           var j = await res.json();
           var out = parsePricingSources(j.pricing);
+          diagTries.push(candidates[c] + ' → HTTP 200, ' + pricingDiagLine(j.pricing) + ', ra ' + out.length + ' nguồn');
           if (!best || out.length > best.length) best = out;
-          if (out.length >= 2) return out;
+          if (out.length >= 2) { saveDiag(); return out; }
           // Mới được <2 nguồn: gọi lại lần nữa bằng URL mới trước khi chấp nhận.
           if (i < 2) await new Promise(function (r) { setTimeout(r, 600); });
         } catch (err) {
           lastErr = err;
+          diagTries.push(candidates[c] + ' → lỗi: ' + (err.message || err));
           if (i < 2) await new Promise(function (r) { setTimeout(r, 800 * (i + 1)); });
         }
       }
-      if (best && best.length) return best;
+      if (best && best.length) { saveDiag(); return best; }
     }
+    saveDiag();
     if (best) return best;
     if (lastErr) throw lastErr;
     return [];
@@ -1497,6 +1531,7 @@
     cardImageURL: cardImageURL, cardImageFallbackURL: cardImageFallbackURL,
     placeholderImage: placeholderImage,
     fetchMarketPrices: fetchMarketPrices, parsePricingSources: parsePricingSources,
+    getLastPriceDiag: function () { return lastPriceDiag; },
     priceSourceDefs: priceSourceDefs,
     fmtPrice: fmtPrice, toVND: toVND, condFactor: condFactor,
     marketSourceRows: marketSourceRows, marketRangeVND: marketRangeVND,

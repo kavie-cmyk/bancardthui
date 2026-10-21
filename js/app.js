@@ -543,32 +543,37 @@
   }
 
   function marketSectionHTML(c) {
-    var rows = BCT.marketSourceRows(c);
-    var range = BCT.marketRangeVND(c);
+    var rows = BCT.marketSourceRows(c) || [];
     var condName = BCT.condLabel(c.condition);
-    var head;
-    if (range && range.count > 0) {
-      head = '<div class="mkt-price">' +
-        (range.min === range.max ? BCT.fmtVND(range.max)
-          : BCT.fmtVND(range.min) + ' – ' + BCT.fmtVND(range.max)) +
-        '</div><div class="hint">' + range.count + ' nguồn · đã × hệ số Cond ' + BCT.esc(condName) + ' (ước tính)</div>';
-    } else if (range) {
-      head = '<div class="mkt-price">' + BCT.fmtVND(range.max) + '</div><div class="hint">Giá đã lưu (chưa tách theo nguồn).</div>';
-    } else {
-      head = '<p class="panel-note">Chưa có giá tham khảo.</p>';
+    var bySource = {};
+    rows.forEach(function (r) { bySource[r.source] = r; });
+    function srcBlock(label, r) {
+      if (!r) {
+        return '<div class="mkt-src"><b>' + BCT.esc(label) + '</b>' +
+          '<div class="hint">Chưa có giá từ nguồn này — bấm "Kéo giá các nguồn" ở dưới để lấy.</div></div>';
+      }
+      var upd = r.updated_at ? BCT.fmtDate(String(r.updated_at).slice(0, 10)) : '—';
+      var kind = r.kind === 'manual' ? 'nhập tay' : BCT.esc(r.kind || '');
+      return '<div class="mkt-src"><b>' + BCT.esc(label) + '</b> ' + BCT.fmtPrice(r.price, r.currency) +
+        (kind ? ' <span class="hint">(' + kind + ')</span>' : '') +
+        '<div class="hint">= ' + BCT.fmtVND(r.vnd) + ' → <b>Cond ' + BCT.esc(condName) + ': ' + BCT.fmtVND(r.vndCond) + '</b> · cập nhật ' + upd + '</div></div>';
     }
-    var list = '';
-    if (rows) {
-      list = '<div class="mkt-break">' + rows.map(function (r) {
-        var upd = r.updated_at ? BCT.fmtDate(String(r.updated_at).slice(0, 10)) : '—';
-        var kind = r.kind === 'manual' ? 'nhập tay' : BCT.esc(r.kind || '');
-        return '<div class="mkt-src"><b>' + BCT.esc(r.label) + '</b> ' + BCT.fmtPrice(r.price, r.currency) +
-          (kind ? ' <span class="hint">(' + kind + ')</span>' : '') +
-          '<div class="hint">= ' + BCT.fmtVND(r.vnd) + ' → <b>Cond ' + BCT.esc(condName) + ': ' + BCT.fmtVND(r.vndCond) + '</b> · cập nhật ' + upd + '</div></div>';
-      }).join('') + '</div>';
+    // Mỗi nguồn một mục riêng, không gộp chung (yêu cầu của Zac 2026-10-21).
+    var mainKeys = ['cardmarket', 'tcgplayer'];
+    var blocks = mainKeys.map(function (k) {
+      var def = null;
+      BCT.priceSourceDefs().forEach(function (d) { if (d.key === k) def = d; });
+      return srcBlock(def ? def.label : k, bySource[k]);
+    });
+    rows.forEach(function (r) {
+      if (mainKeys.indexOf(r.source) < 0) blocks.push(srcBlock(r.label, r));
+    });
+    var list = '<div class="mkt-break">' + blocks.join('') + '</div>';
+    if (!rows.length && c.marketPrice != null) {
+      list += '<p class="panel-note">Giá đã lưu trước đây (chưa tách theo nguồn): <b>' + BCT.fmtVND(c.marketPrice) + '</b> — bấm kéo giá để tách theo từng nguồn.</p>';
     }
     return '<section class="panel" style="margin-bottom:14px"><div class="panel-head"><h2 class="panel-title">Giá tham khảo</h2></div>' +
-      head + list +
+      list +
       '<div class="form-grid" style="margin-top:10px">' +
       '<div class="field"><label>Kéo tự động (miễn phí)</label>' +
       '<button id="mkt-fetch" class="btn secondary" type="button">Kéo giá các nguồn</button>' +
