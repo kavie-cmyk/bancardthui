@@ -1061,8 +1061,12 @@
   //      với sv08-226: phía Zac + Supabase trúng bản trống, bản khác đủ).
   //   2) pokemontcg.io trực tiếp — nguồn ĐỘC LẬP với TCGdex, dùng MÃ SET
   //      RIÊNG của họ (sv8 thay vì sv08 — xem ioSetIdCandidates).
-  //   3) price-proxy: máy chủ Supabase đi lấy TCGdex hộ — 1 lần gọi.
-  //   4) Chờ 3 giây, gọi lại price-proxy lần cuối (nuốt khoảnh khắc
+  //   3) Bản giá dự phòng lưu sẵn trên chính site (prices/<set>-<số>.json):
+  //      được lấy từ một mạng khác hẳn cho những lá kẹt cứng ở các đường
+  //      trực tiếp — app đọc ngay trên tên miền của mình nên không phụ
+  //      thuộc bản sao phân phối nào của TCGdex cả.
+  //   4) price-proxy: máy chủ Supabase đi lấy TCGdex hộ — 1 lần gọi.
+  //   5) Chờ 3 giây, gọi lại price-proxy lần cuối (nuốt khoảnh khắc
   //      TCGdex trả tcgplayer = NULL theo đợt cập nhật dữ liệu).
   // Mỗi bước chỉ lấp nguồn còn thiếu, không ghi đè nguồn đã có. Chẩn đoán
   // là 1 dòng ngắn cho mỗi bước đã chạy (BCT.getLastPriceDiag).
@@ -1143,11 +1147,29 @@
     diagTries.push('2) pokemontcg.io: ' + (lastIoDiag || 'không rõ') + ' → ' + count() + ' nguồn');
     if (count() >= 2) return finish();
 
+    // Bước 3: bản giá dự phòng lưu sẵn ngay trên site (prices/<set>-<số>.json
+    // trong repo — được lấy từ một mạng khác hẳn cho những lá kẹt cứng ở
+    // các đường trực tiếp; file không có thì 404, bỏ qua êm).
+    try {
+      var fres = await fetchWithTimeout('prices/' + encodeURIComponent(String(setId).trim()) + '-' +
+        encodeURIComponent(raw) + '.json?cb=' + Date.now(), { cache: 'no-store' }, 8000);
+      if (fres.ok) {
+        var fj = await fres.json();
+        absorb(fj && fj.sources);
+        diagTries.push('3) bản giá lưu sẵn: có (lấy ' + String((fj && fj.fetched_at) || '?').slice(0, 10) + ') → ' + count() + ' nguồn');
+      } else {
+        diagTries.push('3) bản giá lưu sẵn: không có');
+      }
+    } catch (e) {
+      diagTries.push('3) bản giá lưu sẵn: lỗi ' + (e.message || e));
+    }
+    if (count() >= 2) return finish();
+
     for (var px = 0; px < 2 && count() < 2; px++) {
       if (px > 0) await priceSleep(3000);
       var sp = await fetchPriceProxy(setId, raw);
       absorb(sp.entries);
-      diagTries.push((px === 0 ? '3' : '4') + ') qua Supabase: ' + sp.note + ' → ' + count() + ' nguồn');
+      diagTries.push((px === 0 ? '4' : '5') + ') qua Supabase: ' + sp.note + ' → ' + count() + ' nguồn');
     }
     return finish();
   }
