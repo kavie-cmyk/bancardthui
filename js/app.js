@@ -1247,7 +1247,11 @@
 
   /* ================= VIEW: ĐƠN HÀNG ================= */
   /* ================= VIEW: QUÉT THẺ (nhận diện từ ảnh — CardSight AI) ================= */
-  var scanState = { photo: '', result: null };
+  var scanState = { photo: '', result: null, stream: null };
+  function fld(label, inner) { return '<div class="field"><label>' + label + '</label>' + inner + '</div>'; }
+  function stopScanCam() {
+    if (scanState.stream) { scanState.stream.getTracks().forEach(function (t) { t.stop(); }); scanState.stream = null; }
+  }
   function vQuet() {
     var tokens = BCT.getCardSightKeys();
     var active = BCT.getCardSightKey();
@@ -1270,7 +1274,10 @@
       '<p class="panel-note">Có thể lưu nhiều key (nhiều tài khoản) và chuyển qua lại. Key chỉ lưu trong trình duyệt này — không đưa lên GitHub, không ai khác thấy được. Đổi máy hoặc đổi trình duyệt sẽ phải dán lại.</p></section>';
     if (!active) return html;
     html += '<section class="panel"><h3 style="margin-top:0">Chọn ảnh lá bài</h3>' +
-      '<label class="img-drop" id="scan-drop">📷 Chụp / chọn ảnh lá bài<input type="file" id="scan-file" accept="image/*" hidden></label>' +
+      '<label class="img-drop" id="scan-drop">📷 Chụp / chọn ảnh lá bài<input type="file" id="scan-file" accept="image/*" capture="environment" hidden></label>' +
+      '<div class="form-actions"><button type="button" class="btn secondary" id="scan-cam-open">📹 Hoặc chụp bằng webcam / camera máy</button></div>' +
+      '<div id="scan-cam" hidden><video id="scan-video" autoplay playsinline style="width:100%;border-radius:12px;background:#000"></video>' +
+      '<div class="form-actions"><button type="button" class="btn" id="scan-cam-shot">Chụp ảnh này</button><button type="button" class="btn secondary" id="scan-cam-close">Tắt camera</button></div></div>' +
       '<div id="scan-preview"></div>' +
       '<div class="form-actions"><button type="button" class="btn" id="scan-go" disabled>Nhận diện lá này (1 lượt)</button></div>' +
       '<div id="scan-result"></div></section>';
@@ -1765,6 +1772,38 @@
           $('scan-result').innerHTML = '';
         }).catch(function () { toast('Đọc ảnh không được.', 'err'); });
       });
+      var camOpen = $('scan-cam-open');
+      if (camOpen) camOpen.addEventListener('click', async function () {
+        var box = $('scan-cam');
+        if (!box) return;
+        box.hidden = false;
+        try {
+          scanState.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+          $('scan-video').srcObject = scanState.stream;
+        } catch (e) {
+          toast('Không mở được camera: ' + (e.message || e) + ' — kiểm tra quyền camera của trình duyệt cho trang này.', 'err');
+          box.hidden = true;
+        }
+      });
+      var camShot = $('scan-cam-shot');
+      if (camShot) camShot.addEventListener('click', function () {
+        var v = $('scan-video');
+        if (!v || !v.videoWidth) { toast('Camera chưa sẵn sàng.', 'err'); return; }
+        var scale = Math.min(1, 1400 / v.videoWidth);
+        var cv = document.createElement('canvas');
+        cv.width = Math.round(v.videoWidth * scale); cv.height = Math.round(v.videoHeight * scale);
+        cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+        scanState.photo = cv.toDataURL('image/jpeg', 0.85);
+        scanState.result = null;
+        $('scan-preview').innerHTML = '<img class="img-preview" src="' + scanState.photo + '" alt="Ảnh lá bài vừa chụp">';
+        $('scan-result').innerHTML = '';
+        var g = $('scan-go');
+        if (g) { g.disabled = false; g.textContent = 'Nhận diện lá này (1 lượt)'; }
+        stopScanCam();
+        var b = $('scan-cam'); if (b) b.hidden = true;
+      });
+      var camClose = $('scan-cam-close');
+      if (camClose) camClose.addEventListener('click', function () { stopScanCam(); var b = $('scan-cam'); if (b) b.hidden = true; });
       var scanGo = $('scan-go');
       if (scanGo) scanGo.addEventListener('click', function () {
         if (!scanState.photo) return;
