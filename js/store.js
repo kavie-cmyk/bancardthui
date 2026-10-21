@@ -981,24 +981,35 @@
   };
 
   // TCGdex: trả về [cardmarket?, tcgplayer?]. Retry + timeout nội bộ.
+  // QUAN TRỌNG: localId của TCGdex KHÔNG đệm số 0 ("swsh7-49", không phải
+  // "swsh7-049") trong khi app lưu số có đệm ("049") → thử bản không đệm trước,
+  // 404 thì thử lại bản gốc. Số lẫn chữ (promo "SWSH230") giữ nguyên.
   async function fetchTcgdexPricing(setId, number) {
-    var url = 'https://api.tcgdex.net/v2/en/cards/' +
-      encodeURIComponent(String(setId).trim()) + '-' +
-      encodeURIComponent(String(number).trim());
+    var raw = String(number).trim();
+    var candidates = [];
+    var n = parseCardNumber(raw);
+    if (/^\d+$/.test(raw) && n != null && String(n) !== raw) candidates.push(String(n));
+    candidates.push(raw);
     var lastErr = null;
-    for (var i = 0; i < 3; i++) {
-      try {
-        var res = await fetchWithTimeout(url, null, 15000);
-        if (res.status === 404) return [];
-        if (!res.ok) throw new Error('TCGdex API lỗi HTTP ' + res.status);
-        var j = await res.json();
-        return parsePricingSources(j.pricing);
-      } catch (err) {
-        lastErr = err;
-        if (i < 2) await new Promise(function (r) { setTimeout(r, 800 * (i + 1)); });
+    for (var c = 0; c < candidates.length; c++) {
+      var url = 'https://api.tcgdex.net/v2/en/cards/' +
+        encodeURIComponent(String(setId).trim()) + '-' +
+        encodeURIComponent(candidates[c]);
+      for (var i = 0; i < 3; i++) {
+        try {
+          var res = await fetchWithTimeout(url, null, 15000);
+          if (res.status === 404) break; // thử dạng số kế tiếp
+          if (!res.ok) throw new Error('TCGdex API lỗi HTTP ' + res.status);
+          var j = await res.json();
+          return parsePricingSources(j.pricing);
+        } catch (err) {
+          lastErr = err;
+          if (i < 2) await new Promise(function (r) { setTimeout(r, 800 * (i + 1)); });
+        }
       }
     }
-    throw lastErr;
+    if (lastErr) throw lastErr;
+    return [];
   }
 
   // eBay: SLOT chờ duyệt App ID (dev kavie2004). Hiện tại trả [] êm thấm.

@@ -112,10 +112,15 @@
     });
     if (!res.ok) {
       var msg = 'Không gửi được link đăng nhập.';
+      var rawMsg = '';
       try {
         var j = await res.json();
-        if (j && (j.msg || j.message || j.error_description)) msg += ' ' + (j.msg || j.message || j.error_description);
+        if (j && (j.msg || j.message || j.error_description)) rawMsg = String(j.msg || j.message || j.error_description);
       } catch (e) { msg += ' (HTTP ' + res.status + ')'; }
+      if (res.status === 429 || /rate limit/i.test(rawMsg)) {
+        throw new Error('Supabase đang tạm chặn gửi email đăng nhập vì đã gửi quá nhiều trong giờ qua (hạn mức mặc định của gói free rất thấp). Đợi khoảng 30–60 phút rồi thử lại 1 lần; muốn hết hẳn thì cần nâng hạn mức / gắn SMTP riêng trong Supabase.');
+      }
+      if (rawMsg) msg += ' ' + rawMsg;
       throw new Error(msg);
     }
     return true;
