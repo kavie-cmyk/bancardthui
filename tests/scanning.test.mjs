@@ -27,7 +27,7 @@ function appContext() {
   c.location = { hash: '' };
   const source = fs.readFileSync('js/app.js', 'utf8').replace('  boot();', `
     S = BCT.blankState();
-    window.testApp = { scanConfirmHTML, holoInput, bindScanForm, vNhap, state: S,
+    window.testApp = { scanConfirmHTML, holoInput, bindScanForm, vNhap, vCardEdit, state: S,
       setScan: function (r) { scanState = { result: r, photo: '' }; } };
   `);
   vm.runInContext(source, c);
@@ -127,11 +127,14 @@ test('custom holo survives insert/edit; UI keeps uncommon values and offers edit
 
 test('scan form shows real set and Japanese image; unknown finish requires confirmation', () => {
   const c = appContext();
-  const parsed = c.BCT.parseCardSightResult(response({ releaseName: 'ニンジャスピナー' }));
+  const parsed = c.BCT.parseCardSightResult(response({ releaseName: 'ニンジャスピナー', fields: [{key:'CARD_LANGUAGE',value:'ja'}, {key:'Rarity',value:'SAR'}] }));
   const html = c.testApp.scanConfirmHTML(parsed);
   assert.match(html, /id="s-setname" required[^>]*value="ニンジャスピナー"/);
   assert.match(html, /\/ja\/M\/M4\/022\//);
   assert.match(html, /id="s-holo"/);
+  assert.match(html, /value="SAR" selected/);
+  c.testApp.state.cards.push({id:'sar',name:'Test',rarity:'SAR',language:'jp'});
+  assert.match(c.testApp.vCardEdit('sar'), /<option selected>SAR<\/option>/);
   assert.match(html, /id="s-variant" required><option value="">/);
   assert.doesNotMatch(html, /value="Checklist"/);
 });

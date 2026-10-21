@@ -1138,7 +1138,7 @@
     html += '<div class="field"><label>Set</label><input id="e-set" list="set-list" value="' + BCT.esc(c.set || '') + '" autocomplete="off"><datalist id="set-list">' + setDatalistOptions() + '</datalist><div class="hint" id="e-set-hint">' + setHintHTML(c.set || '') + '</div></div>';
     html += '<div class="field"><label>Số thứ tự trong set</label><input id="e-number" value="' + BCT.esc(c.number || '') + '" placeholder="VD: 025"></div>';
     html += '<div class="field"><label>Độ hiếm</label><select id="e-rarity"><option value="">— Chọn —</option>' +
-      BCT.RARITIES.map(function (r) { return '<option' + (c.rarity === r ? ' selected' : '') + '>' + r + '</option>'; }).join('') + '</select></div>';
+      BCT.RARITIES.concat(c.rarity && BCT.RARITIES.indexOf(c.rarity) < 0 ? [c.rarity] : []).map(function (r) { return '<option' + (c.rarity === r ? ' selected' : '') + '>' + BCT.esc(r) + '</option>'; }).join('') + '</select></div>';
     html += '<div class="field"><label>Ngôn ngữ</label><select id="e-lang">' +
       Object.keys(BCT.LANGUAGES).map(function (k) { return '<option value="' + k + '"' + ((c.language || 'en') === k ? ' selected' : '') + '>' + BCT.LANGUAGES[k] + '</option>'; }).join('') + '</select></div>';
     html += '<div class="field"><label>Condition</label><select id="e-cond">' +
@@ -1472,7 +1472,10 @@
       var sel = res.variant === v ? ' selected' : '';
       return '<option value="' + BCT.esc(v) + '"' + sel + '>' + BCT.esc((BCT.VARIANT_LABELS && BCT.VARIANT_LABELS[v]) || v) + '</option>';
     }).join('');
-    var rarOpts = BCT.RARITIES.map(function (r) { return '<option value="' + BCT.esc(r) + '"' + (res.rarity && r.toLowerCase() === String(res.rarity).toLowerCase() ? ' selected' : '') + '>' + BCT.esc(r) + '</option>'; }).join('');
+    var rarOpts = '<option value="">— Chưa xác định —</option>' + BCT.RARITIES.map(function (r) { return '<option value="' + BCT.esc(r) + '"' + (res.rarity && r.toLowerCase() === String(res.rarity).toLowerCase() ? ' selected' : '') + '>' + BCT.esc(r) + '</option>'; }).join('');
+    if (res.rarity && !BCT.RARITIES.some(function (r) { return r.toLowerCase() === String(res.rarity).toLowerCase(); })) {
+      rarOpts += '<option value="' + BCT.esc(res.rarity) + '" selected>' + BCT.esc(res.rarity) + '</option>';
+    }
     var condOpts = BCT.CONDITIONS.map(function (cd) { return '<option' + (cd === 'New Mint' ? ' selected' : '') + '>' + BCT.esc(cd) + '</option>'; }).join('');
     var today = new Date(); var pad = function (n) { return (n < 10 ? '0' : '') + n; };
     var todayStr = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
