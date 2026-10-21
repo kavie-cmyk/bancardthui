@@ -478,3 +478,12 @@ a.num-cell.missing:hover .num-add { opacity: 1; }
 .login-panel .btn { width: 100%; justify-content: center; }
 .login-sent { padding: 8px 0 4px; }
 .login-sent-title { font-size: 17px; font-weight: 700; color: var(--green); margin-bottom: 8px; }
+
+/* Quét thẻ (Ximilar) */
+.tag.ok { color: var(--green); border-color: var(--green); }
+#scan-preview img { width: 120px; height: 168px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line-soft); margin-top: 10px; }
+.scan-found { display: flex; gap: 16px; align-items: flex-start; margin: 16px 0 4px; }
+.scan-thumb > * { width: 110px; height: 154px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line-soft); }
+.scan-name { font-size: 19px; font-weight: 800; }
+.scan-meta { color: var(--muted); margin-top: 4px; }
+.scan-meta.warn { color: var(--gold-soft); }

@@ -20,6 +20,10 @@
   // eBay: tài khoản dev kavie2004 đã đăng ký, đang chờ duyệt thủ công (~1 ngày làm việc) để cấp App ID.
   // Khi có App ID: dán vào EBAY_APP_ID bên dưới + viết body fetchEbayPricing trong store.js (đã để sẵn TODO).
   root.EBAY_APP_ID = '';
+  // Ximilar — nhận diện thẻ từ ảnh (view "Quét thẻ"). Chỉ để URL endpoint ở đây.
+  // API token TUYỆT ĐỐI không ghi vào file này (repo public): user dán token trong
+  // view Quét thẻ, app lưu ở localStorage của trình duyệt (key bct_ximilar_token).
+  root.XIMILAR_TCG_ID_URL = 'https://api.ximilar.com/collectibles/v2/tcg_id';
   root.PRICE_SOURCE_DEFS = [
     { key: 'cardmarket', label: 'Cardmarket', auto: 'tcgdex' }, // auto qua TCGdex pricing
     { key: 'tcgplayer',  label: 'TCGplayer',  auto: 'tcgdex' }, // auto qua TCGdex pricing

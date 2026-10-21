@@ -1130,6 +1130,100 @@
 
   // ---------- wipe / reseed / export ----------
   // Xóa toàn bộ dữ liệu (thứ tự an toàn FK). Trả về state trống.
+  // ---------- Ximilar: nhận diện thẻ từ ảnh (view Quét thẻ) ----------
+  // Token không nằm trong code/config (repo public) — user dán trong app,
+  // lưu ở localStorage key dưới đây. Gói free có sẵn credits để test.
+  var XIMILAR_TOKEN_KEY = 'bct_ximilar_token';
+  var _ximilarTokenMem = '';
+  function getXimilarToken() {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage) return localStorage.getItem(XIMILAR_TOKEN_KEY) || '';
+    } catch (e) { /* private mode / node */ }
+    return _ximilarTokenMem;
+  }
+  function setXimilarToken(t) {
+    t = String(t || '').trim();
+    _ximilarTokenMem = t;
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage) {
+        if (t) localStorage.setItem(XIMILAR_TOKEN_KEY, t); else localStorage.removeItem(XIMILAR_TOKEN_KEY);
+      }
+    } catch (e) {}
+    return t;
+  }
+  function ximilarUrl() {
+    var g = (typeof window !== 'undefined') ? window : globalThis;
+    return (g && g.XIMILAR_TCG_ID_URL) || 'https://api.ximilar.com/collectibles/v2/tcg_id';
+  }
+
+  // Tìm object "identification" trong response của Ximilar (cấu trúc lồng nhau
+  // thay đổi theo phiên bản API nên duyệt đệ quy, lấy object khớp nhiều khóa nhất).
+  function findIdentification(node, depth) {
+    if (!node || typeof node !== 'object' || depth > 6) return null;
+    var keys = ['full_name', 'name', 'card_number', 'set', 'set_code', 'series'];
+    var score = 0;
+    keys.forEach(function (k) { if (node[k] != null && node[k] !== '') score++; });
+    if (score >= 2 && (node.full_name || node.name)) return node;
+    var best = null;
+    Object.keys(node).forEach(function (k) {
+      var found = findIdentification(node[k], depth + 1);
+      if (found && !best) best = found;
+    });
+    return best;
+  }
+
+  // Chuẩn hóa kết quả nhận diện về các trường app dùng được. Trả null nếu không nhận diện được.
+  function parseXimilarResult(json) {
+    var idf = findIdentification(json, 0);
+    if (!idf) return null;
+    function s(v) { return v == null ? '' : String(v).trim(); }
+    var tags = {};
+    if (Array.isArray(idf.tags)) idf.tags.forEach(function (t) { if (t && t.name) tags[String(t.name).toLowerCase()] = t; });
+    var lang = '';
+    var alpha = s(idf.alphabet || idf.language || (tags.language && tags.language.value) || '').toLowerCase();
+    if (alpha.indexOf('japan') >= 0 || alpha === 'ja' || alpha === 'jp') lang = 'jp';
+    else if (alpha.indexOf('eng') >= 0 || alpha === 'en') lang = 'en';
+    var foilTxt = s(idf.foil || idf.finish || (tags.foil && tags.foil.value) || '').toLowerCase();
+    return {
+      name: s(idf.full_name || idf.name),
+      number: s(idf.card_number || idf.number),
+      setName: s(idf.set),
+      setCode: s(idf.set_code),
+      series: s(idf.series),
+      year: s(idf.year),
+      language: lang,
+      foil: foilTxt && foilTxt !== 'non-foil' && foilTxt !== 'no' && foilTxt !== 'false',
+      raw: idf
+    };
+  }
+
+  // Gửi 1 ảnh (dataURL) lên Ximilar tcg_id. Tốn 10 credits/lần theo bảng giá của họ.
+  async function identifyCardByPhoto(dataURL) {
+    var token = getXimilarToken();
+    if (!token) throw new Error('Chưa có API token của Ximilar. Dán token vào ô phía trên trước.');
+    var b64 = String(dataURL || '').replace(/^data:[^,]*,/, '');
+    if (!b64) throw new Error('Ảnh không hợp lệ.');
+    var res;
+    try {
+      res = await fetchWithTimeout(ximilarUrl(), {
+        method: 'POST',
+        headers: { 'Authorization': 'Token ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ records: [{ _base64: b64 }] })
+      }, 45000);
+    } catch (e) {
+      throw new Error('Không gọi được Ximilar (' + (e && e.message ? e.message : 'lỗi mạng') + '). Nếu lỗi kiểu "Failed to fetch" lặp lại, có thể trình duyệt chặn CORS — báo lại cho Miso để đổi cách gọi qua proxy.');
+    }
+    var json = null;
+    try { json = await res.json(); } catch (e) { /* giữ null */ }
+    if (res.status === 401 || res.status === 403) throw new Error('API token không đúng hoặc chưa được kích hoạt (HTTP ' + res.status + '). Kiểm tra lại token trong tài khoản Ximilar.');
+    if (res.status === 402) throw new Error('Tài khoản Ximilar đã hết credits. Đợi tháng sau (gói free cấp lại) hoặc nâng gói.');
+    if (res.status === 429) throw new Error('Ximilar giới hạn tốc độ gọi. Đợi một chút rồi thử lại.');
+    if (!res.ok) throw new Error('Ximilar trả lỗi HTTP ' + res.status + (json && json.detail ? ': ' + json.detail : '') + '.');
+    var parsed = parseXimilarResult(json);
+    if (!parsed || !parsed.name) throw new Error('Ximilar không nhận diện được lá này. Thử chụp rõ hơn: đủ sáng, nền trơn, lá chiếm phần lớn khung hình.');
+    return parsed;
+  }
+
   // ---------- rao bán (listings, Phase 2 — quản lý trong app, chưa phải storefront) ----------
   var LISTING_STATUSES = ['draft', 'active', 'sold', 'hidden'];
   var LISTING_STATUS_LABELS = { draft: 'Nháp', active: 'Đang rao', sold: 'Đã bán', hidden: 'Đã ẩn' };
@@ -1266,6 +1360,8 @@
     LISTING_STATUSES: LISTING_STATUSES, LISTING_STATUS_LABELS: LISTING_STATUS_LABELS,
     listingsOfCard: listingsOfCard, getListing: getListing,
     createListing: createListing, updateListing: updateListing, deleteListing: deleteListing,
+    getXimilarToken: getXimilarToken, setXimilarToken: setXimilarToken,
+    identifyCardByPhoto: identifyCardByPhoto, parseXimilarResult: parseXimilarResult,
     wipeAll: wipeAll, reseed: reseed, exportJSON: exportJSON
   };
 

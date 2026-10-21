@@ -192,6 +192,7 @@
     { path: '#/kho', label: 'Kho card', icon: IC.box },
     { path: '#/sets', label: 'Bộ sưu tập', icon: IC.layers },
     { path: '#/nhap', label: 'Nhập kho', icon: IC.plus },
+    { path: '#/quet', label: 'Quét thẻ', icon: IC.card },
     { path: '#/ban', label: 'Bán hàng', icon: IC.tag },
     { path: '#/rao', label: 'Rao bán', icon: IC.coin },
     { path: '#/donhang', label: 'Đơn hàng', icon: IC.receipt }
@@ -267,6 +268,7 @@
     else if (base === 'kho') app.innerHTML = (r.segs[1] && r.segs[2] === 'edit') ? vCardEdit(r.segs[1]) : (r.segs[1] ? vCardDetail(r.segs[1]) : vKho());
     else if (base === 'sets') app.innerHTML = r.segs[1] === 'manage' ? vSetManage(r.query) : (r.segs.length > 1 ? vSetDetail(decodeURIComponent(r.segs.slice(1).join('/'))) : vSets());
     else if (base === 'nhap') app.innerHTML = vNhap(r.query);
+    else if (base === 'quet') app.innerHTML = vQuet();
     else if (base === 'ban') app.innerHTML = vBan(r.query.card || '');
     else if (base === 'rao') app.innerHTML = vListings(r.query);
     else if (base === 'donhang') app.innerHTML = r.segs[1] ? vOrderDetail(r.segs[1]) : vDonHang();
@@ -1244,6 +1246,111 @@
   }
 
   /* ================= VIEW: ĐƠN HÀNG ================= */
+  /* ================= VIEW: QUÉT THẺ (nhận diện từ ảnh — Ximilar) ================= */
+  var scanState = { photo: '', result: null };
+  function vQuet() {
+    var token = BCT.getXimilarToken();
+    var html = '<h1 class="page-title">Quét thẻ bằng ảnh</h1>' +
+      '<p class="page-sub">Chụp hoặc tải ảnh 1 lá → AI (Ximilar) nhận diện tên, set, số thứ tự → bạn kiểm tra lại rồi lưu vào kho kèm lô nhập. Mỗi lần nhận diện tốn 10 credits trong tài khoản Ximilar.</p>';
+    if (!token) {
+      html += '<section class="panel"><h3 style="margin-top:0">Bước 1: gắn API token (chỉ làm 1 lần)</h3>' +
+        '<p class="panel-note">Đăng ký tài khoản free tại <b>app.ximilar.com</b> (không cần thẻ thanh toán), vào mục API của tài khoản để lấy <b>API token</b> rồi dán vào đây. Token chỉ lưu trong trình duyệt này — không đưa lên GitHub, không ai khác thấy được.</p>' +
+        '<div class="form-grid"><div class="field wide"><label>API token của Ximilar</label><input type="password" id="xim-token" placeholder="Dán API token vào đây" autocomplete="off"></div></div>' +
+        '<div class="form-actions"><button type="button" class="btn" id="xim-save">Lưu token</button></div></section>';
+      return html;
+    }
+    html += '<section class="panel"><div class="panel-head"><h3 style="margin:0">API Ximilar</h3><span class="tag ok">Đã gắn token</span></div>' +
+      '<p class="panel-note">Đổi máy hoặc đổi trình duyệt sẽ phải dán lại token. <button type="button" class="btn secondary btn-sm" id="xim-clear">Xóa token khỏi máy này</button></p></section>';
+    html += '<section class="panel"><h3 style="margin-top:0">Bước 2: chọn ảnh lá bài</h3>' +
+      '<label class="img-drop" id="scan-drop">📷 Chụp / chọn ảnh lá bài<input type="file" id="scan-file" accept="image/*" hidden></label>' +
+      '<div id="scan-preview"></div>' +
+      '<div class="form-actions"><button type="button" class="btn" id="scan-go" disabled>Nhận diện lá này (10 credits)</button></div>' +
+      '<div id="scan-result"></div></section>';
+    return html;
+  }
+
+  function scanConfirmHTML(res) {
+    var matched = lookupSetByName(res.setName || '');
+    var tmpCard = { setId: matched ? matched.id : '', number: res.number || '', name: res.name || '', images: [] };
+    var variantOpts = BCT.VARIANTS.map(function (v) {
+      var sel = res.foil && v === 'Holo' ? ' selected' : (!res.foil && v === 'Normal' ? ' selected' : '');
+      return '<option value="' + esc(v) + '"' + sel + '>' + esc((BCT.VARIANT_LABELS && BCT.VARIANT_LABELS[v]) || v) + '</option>';
+    }).join('');
+    var rarOpts = BCT.RARITIES.map(function (r) { return '<option value="' + esc(r) + '">' + esc(r) + '</option>'; }).join('');
+    var condOpts = BCT.CONDITIONS.map(function (cd) { return '<option' + (cd === 'New Mint' ? ' selected' : '') + '>' + esc(cd) + '</option>'; }).join('');
+    var today = new Date(); var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var todayStr = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
+    var html = '<div class="scan-found"><div class="scan-thumb">' + cardImgTag(tmpCard, res.name) + '</div><div>' +
+      '<div class="scan-name">' + esc(res.name) + '</div>' +
+      '<div class="scan-meta">' + esc([res.setName, res.number ? 'số ' + res.number : '', res.year, res.series].filter(Boolean).join(' · ')) + '</div>' +
+      (matched ? '<div class="scan-meta">Khớp set trong dữ liệu: <b>' + esc(matched.name) + '</b> — ảnh chính thức sẽ tự hiển thị.</div>'
+               : '<div class="scan-meta warn">Chưa khớp được set "' + esc(res.setName || '?') + '" với dữ liệu TCGdex — kiểm tra lại tên set ở form dưới, hoặc lá này sẽ dùng ảnh chụp làm ảnh chính.</div>') +
+      '</div></div>';
+    html += '<form id="f-scan"><div class="form-grid">' +
+      fld('Tên lá *', '<input id="s-name" required value="' + esc(res.name) + '">') +
+      fld('Set (gõ để chọn)', '<input id="s-setname" list="set-list" value="' + esc(matched ? matched.name : (res.setName || '')) + '" placeholder="Tên set"><datalist id="set-list">' + setDatalistOptions() + '</datalist>') +
+      fld('Số thứ tự', '<input id="s-number" value="' + esc(res.number || '') + '" placeholder="vd 025/165">') +
+      fld('Ngôn ngữ', '<select id="s-lang"><option value="en"' + (res.language === 'en' ? ' selected' : '') + '>Tiếng Anh</option><option value="jp"' + (res.language === 'jp' ? ' selected' : '') + '>Tiếng Nhật</option><option value="other"' + (res.language === 'other' ? ' selected' : '') + '>Khác</option></select>') +
+      fld('Độ hiếm', '<select id="s-rarity">' + rarOpts + '</select>') +
+      fld('Phiên bản', '<select id="s-variant">' + variantOpts + '</select>') +
+      fld('Tình trạng', '<select id="s-cond">' + condOpts + '</select>') +
+      fld('Số lượng nhập *', '<input id="s-qty" type="number" min="1" value="1" required>') +
+      fld('Giá vốn / lá (đ) *', '<input id="s-cost" inputmode="numeric" placeholder="vd 150.000" required>') +
+      fld('Ngày nhập', '<input id="s-date" type="date" value="' + todayStr + '">') +
+      fld('Nguồn mua', '<input id="s-source" placeholder="vd Mua sỉ anh A">') +
+      fld('Dùng ảnh chụp làm ảnh của lá', '<select id="s-usephoto"><option value="1" selected>Có — lưu ảnh chụp</option><option value="0">Không — chỉ dùng ảnh chính thức</option></select>') +
+      '</div><div class="form-actions"><button type="submit" class="btn">Lưu vào kho</button></div></form>';
+    return html;
+  }
+
+  function bindScanForm() {
+    var form = $('f-scan');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      withLoading(async function () {
+        var name = $('s-name').value.trim();
+        if (!name) throw new Error('Thiếu tên lá.');
+        var qty = Math.floor(Number($('s-qty').value) || 0);
+        var cost = parseVND($('s-cost').value);
+        if (qty <= 0) throw new Error('Nhập số lượng lớn hơn 0.');
+        if (cost < 0) throw new Error('Giá vốn không hợp lệ.');
+        var setName = $('s-setname').value.trim();
+        var setHit = lookupSetByName(setName);
+        var num = $('s-number').value.trim();
+        var dup = S.cards.filter(function (x) {
+          return x.name.toLowerCase() === name.toLowerCase()
+            && String(x.number || '') === num
+            && ((setHit && x.setId === setHit.id) || (x.set || '').toLowerCase() === setName.toLowerCase());
+        })[0];
+        var cardId, created = false;
+        if (dup) {
+          cardId = dup.id;
+        } else {
+          var card = await BCT.addCard(S, {
+            name: name, set: setName, setId: setHit ? setHit.id : null,
+            number: num, rarity: $('s-rarity').value, condition: $('s-cond').value,
+            language: $('s-lang').value || 'en', storageLocation: '', note: 'Nhập qua Quét thẻ (Ximilar)'
+          });
+          cardId = card.id; created = true;
+        }
+        var lotCard = BCT.getCard(S, cardId);
+        await BCT.addLot(S, {
+          cardId: cardId, qty: qty, costPerUnit: cost,
+          importDate: $('s-date').value || BCT.todayISO(), source: $('s-source').value.trim(),
+          variant: $('s-variant').value || 'Normal', holoPattern: null,
+          condition: lotCard ? BCT.condLabel(lotCard.condition) : 'A'
+        });
+        if ($('s-usephoto').value === '1' && scanState.photo) {
+          await BCT.uploadImageToCard(S, cardId, [scanState.photo]);
+        }
+        toast((created ? 'Đã tạo card mới và nhập ' : 'Đã nhập thêm vào card có sẵn: ') + qty + '× ' + name + '.');
+        scanState = { photo: '', result: null };
+        location.hash = '#/kho/' + cardId;
+      }).catch(function (err) { toast(err.message); });
+    });
+  }
+
   /* ================= VIEW: RAO BÁN (listings — Phase 2, quản lý nội bộ) ================= */
   var listingFilter = { status: '' };
   function vListings(q) {
@@ -1605,6 +1712,50 @@
     if (base === 'donhang' && !r.segs[1]) {
       $('o-channel').addEventListener('change', function (e) { ordFilter.channel = e.target.value; $('ord-body').innerHTML = ordRows(); });
       $('o-month').addEventListener('change', function (e) { ordFilter.month = e.target.value; $('ord-body').innerHTML = ordRows(); });
+    }
+
+    if (base === 'quet') {
+      var xSave = $('xim-save');
+      if (xSave) xSave.addEventListener('click', function () {
+        var t = ($('xim-token').value || '').trim();
+        if (!t) { toast('Chưa dán token.', 'err'); return; }
+        BCT.setXimilarToken(t);
+        toast('Đã lưu token Ximilar trên trình duyệt này.');
+        render();
+      });
+      var xClear = $('xim-clear');
+      if (xClear) xClear.addEventListener('click', function () {
+        BCT.setXimilarToken('');
+        scanState = { photo: '', result: null };
+        toast('Đã xóa token khỏi máy này.');
+        render();
+      });
+      var scanFile = $('scan-file');
+      if (scanFile) scanFile.addEventListener('change', function () {
+        var file = scanFile.files && scanFile.files[0];
+        if (!file) return;
+        resizeImage(file).then(function (url) {
+          scanState.photo = url; scanState.result = null;
+          $('scan-preview').innerHTML = '<img class="img-preview" src="' + url + '" alt="Ảnh lá bài vừa chọn">';
+          $('scan-go').disabled = false;
+          $('scan-result').innerHTML = '';
+        }).catch(function () { toast('Đọc ảnh không được.', 'err'); });
+      });
+      var scanGo = $('scan-go');
+      if (scanGo) scanGo.addEventListener('click', function () {
+        if (!scanState.photo) return;
+        scanGo.disabled = true; scanGo.textContent = 'Đang nhận diện…';
+        BCT.identifyCardByPhoto(scanState.photo).then(function (res) {
+          scanState.result = res;
+          $('scan-result').innerHTML = scanConfirmHTML(res);
+          bindScanForm();
+          toast('Đã nhận diện: ' + res.name + '. Kiểm tra lại thông tin trước khi lưu.');
+        }).catch(function (e) {
+          toast(e.message || 'Nhận diện thất bại.', 'err');
+        }).then(function () {
+          scanGo.disabled = false; scanGo.textContent = 'Nhận diện lá này (10 credits)';
+        });
+      });
     }
 
     if (base === 'rao') {
