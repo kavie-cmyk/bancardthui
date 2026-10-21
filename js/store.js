@@ -1130,143 +1130,160 @@
 
   // ---------- wipe / reseed / export ----------
   // Xóa toàn bộ dữ liệu (thứ tự an toàn FK). Trả về state trống.
-  // ---------- Ximilar: nhận diện thẻ từ ảnh (view Quét thẻ) ----------
-  // Token không nằm trong code/config (repo public) — user dán trong app,
-  // lưu ở localStorage key dưới đây. Gói free có sẵn credits để test.
-  var XIMILAR_TOKEN_KEY = 'bct_ximilar_token';
-  var _ximilarTokenMem = '';
-  function getXimilarToken() {
-    try {
-      if (typeof localStorage !== 'undefined' && localStorage) return localStorage.getItem(XIMILAR_TOKEN_KEY) || '';
-    } catch (e) { /* private mode / node */ }
-    return _ximilarTokenMem;
-  }
-  function setXimilarToken(t) {
-    t = String(t || '').trim();
-    _ximilarTokenMem = t;
-    try {
-      if (typeof localStorage !== 'undefined' && localStorage) {
-        if (t) localStorage.setItem(XIMILAR_TOKEN_KEY, t); else localStorage.removeItem(XIMILAR_TOKEN_KEY);
-      }
-    } catch (e) {}
-    return t;
-  }
-  // Danh sách nhiều token (mỗi token 1 tài khoản Ximilar). Token đang dùng vẫn
-  // nằm ở key bct_ximilar_token như cũ; danh sách nằm ở key riêng bên dưới.
-  var XIMILAR_TOKENS_KEY = 'bct_ximilar_tokens';
-  var _ximilarTokensMem = null;
+  // ---------- CardSight AI: nhận diện thẻ từ ảnh (view Quét thẻ) ----------
+  // Đã thay Ximilar (2026-10-21): Ximilar bắt tối thiểu gói Business mới cho gọi
+  // API nhận diện thẻ; CardSight free 750 lượt/tháng dùng thật được.
+  // API key không nằm trong code/config (repo public) — user dán trong app,
+  // lưu ở localStorage. Gọi: POST https://api.cardsight.ai/v1/identify/card/pokemon
+  // header X-API-Key, body FormData field "image" (theo SDK chính thức cardsightai).
+  var CS_KEY = 'bct_cardsight_key';
+  var CS_KEYS = 'bct_cardsight_keys';
+  var _csKeyMem = '';
+  var _csKeysMem = null;
   function _lsGet(k) { try { if (typeof localStorage !== 'undefined' && localStorage) return localStorage.getItem(k); } catch (e) {} return null; }
   function _lsSet(k, v) { try { if (typeof localStorage !== 'undefined' && localStorage) { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } } catch (e) {} }
-  function getXimilarTokens() {
+  function getCardSightKey() {
+    var v = _lsGet(CS_KEY);
+    return v != null ? v : _csKeyMem;
+  }
+  function setCardSightKey(t) {
+    t = String(t || '').trim();
+    _csKeyMem = t;
+    _lsSet(CS_KEY, t || null);
+    return t;
+  }
+  function getCardSightKeys() {
     var list = null;
-    var raw = _lsGet(XIMILAR_TOKENS_KEY);
+    var raw = _lsGet(CS_KEYS);
     if (raw) { try { list = JSON.parse(raw); } catch (e) { list = null; } }
-    if (!Array.isArray(list)) list = _ximilarTokensMem;
+    if (!Array.isArray(list)) list = _csKeysMem;
     if (!Array.isArray(list)) list = [];
-    var legacy = getXimilarToken();
-    if (!list.length && legacy) list = [{ label: 'Token 1', token: legacy }];
+    var legacy = getCardSightKey();
+    if (!list.length && legacy) list = [{ label: 'Key 1', token: legacy }];
     return list.filter(function (x) { return x && x.token; });
   }
-  function saveXimilarTokens(list) {
-    _ximilarTokensMem = list;
-    _lsSet(XIMILAR_TOKENS_KEY, JSON.stringify(list));
+  function saveCardSightKeys(list) {
+    _csKeysMem = list;
+    _lsSet(CS_KEYS, JSON.stringify(list));
   }
-  function addXimilarToken(label, token) {
+  function addCardSightKey(label, token) {
     token = String(token || '').trim();
-    if (!token) throw new Error('Chưa dán token.');
-    var list = getXimilarTokens();
+    if (!token) throw new Error('Chưa dán API key.');
+    var list = getCardSightKeys();
     for (var i = 0; i < list.length; i++) {
-      if (list[i].token === token) { setXimilarToken(token); return list; }
+      if (list[i].token === token) { setCardSightKey(token); return list; }
     }
-    list.push({ label: String(label || '').trim() || ('Token ' + (list.length + 1)), token: token });
-    saveXimilarTokens(list);
-    setXimilarToken(token);
+    list.push({ label: String(label || '').trim() || ('Key ' + (list.length + 1)), token: token });
+    saveCardSightKeys(list);
+    setCardSightKey(token);
     return list;
   }
-  function removeXimilarToken(token) {
-    var list = getXimilarTokens().filter(function (x) { return x.token !== token; });
-    saveXimilarTokens(list);
-    if (getXimilarToken() === token) setXimilarToken(list.length ? list[0].token : '');
+  function removeCardSightKey(token) {
+    var list = getCardSightKeys().filter(function (x) { return x.token !== token; });
+    saveCardSightKeys(list);
+    if (getCardSightKey() === token) setCardSightKey(list.length ? list[0].token : '');
     return list;
   }
-
-  function ximilarUrl() {
+  function cardSightBase() {
     var g = (typeof window !== 'undefined') ? window : globalThis;
-    return (g && g.XIMILAR_TCG_ID_URL) || 'https://api.ximilar.com/collectibles/v2/tcg_id';
+    return (g && g.CARDSIGHT_ID_URL) || 'https://api.cardsight.ai/v1/identify/card';
   }
 
-  // Tìm object "identification" trong response của Ximilar (cấu trúc lồng nhau
-  // thay đổi theo phiên bản API nên duyệt đệ quy, lấy object khớp nhiều khóa nhất).
-  function findIdentification(node, depth) {
-    if (!node || typeof node !== 'object' || depth > 6) return null;
-    var keys = ['full_name', 'name', 'card_number', 'set', 'set_code', 'series'];
-    var score = 0;
-    keys.forEach(function (k) { if (node[k] != null && node[k] !== '') score++; });
-    if (score >= 2 && (node.full_name || node.name)) return node;
-    var best = null;
-    Object.keys(node).forEach(function (k) {
-      var found = findIdentification(node[k], depth + 1);
-      if (found && !best) best = found;
-    });
-    return best;
+  function dataURLToBlob(dataURL) {
+    var m = /^data:([^;,]+)?(;base64)?,(.*)$/.exec(String(dataURL || ''));
+    if (!m) return null;
+    var mime = m[1] || 'image/jpeg';
+    var bin = atob(m[3]);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
   }
 
-  // Chuẩn hóa kết quả nhận diện về các trường app dùng được. Trả null nếu không nhận diện được.
-  function parseXimilarResult(json) {
-    var idf = findIdentification(json, 0);
-    if (!idf) return null;
+  // Chuẩn hóa response CardSight về các trường app dùng. Response gốc:
+  // { success, requestId, detections: [{ confidence, card: { name, number, year,
+  //   releaseName, setName, fields: [{key, value}] (CARD_LANGUAGE, Rarity...),
+  //   parallelSuggestions: [{name}], suggestions: [card...] }, grading }] }
+  function parseCardSightResult(json) {
+    if (!json || !Array.isArray(json.detections) || !json.detections.length) return null;
     function s(v) { return v == null ? '' : String(v).trim(); }
-    var tags = {};
-    if (Array.isArray(idf.tags)) idf.tags.forEach(function (t) { if (t && t.name) tags[String(t.name).toLowerCase()] = t; });
+    var det = null;
+    for (var i = 0; i < json.detections.length; i++) {
+      if (json.detections[i] && json.detections[i].card && json.detections[i].card.name) { det = json.detections[i]; break; }
+    }
+    if (!det) det = json.detections[0];
+    var card = det.card || {};
+    if (!card.name && !card.setName) return null;
+    var fields = {};
+    if (Array.isArray(card.fields)) card.fields.forEach(function (f) { if (f && f.key) fields[String(f.key).toUpperCase()] = s(f.value); });
     var lang = '';
-    var alpha = s(idf.alphabet || idf.language || (tags.language && tags.language.value) || '').toLowerCase();
-    if (alpha.indexOf('japan') >= 0 || alpha === 'ja' || alpha === 'jp') lang = 'jp';
-    else if (alpha.indexOf('eng') >= 0 || alpha === 'en') lang = 'en';
-    var foilTxt = s(idf.foil || idf.finish || (tags.foil && tags.foil.value) || '').toLowerCase();
+    var lc = s(fields.CARD_LANGUAGE).toLowerCase();
+    if (lc === 'ja' || lc === 'jp') lang = 'jp';
+    else if (lc === 'en') lang = 'en';
+    else if (lc) lang = 'other';
+    var foil = false, parallelName = '';
+    if (Array.isArray(card.parallelSuggestions) && card.parallelSuggestions.length) {
+      parallelName = s(card.parallelSuggestions[0].name);
+      foil = /holo|foil/i.test(parallelName);
+    }
+    if (card.parallel && card.parallel.name) { parallelName = s(card.parallel.name); foil = /holo|foil/i.test(parallelName); }
+    var graded = null;
+    if (det.grading && det.grading.company && det.grading.grade) {
+      graded = {
+        org: s(det.grading.company.name),
+        score: s(det.grading.grade.value),
+        cert: s(det.grading.certNumber)
+      };
+      if (!graded.org) graded = null;
+    }
     return {
-      name: s(idf.full_name || idf.name),
-      number: s(idf.card_number || idf.number),
-      setName: s(idf.set),
-      setCode: s(idf.set_code),
-      series: s(idf.series),
-      year: s(idf.year),
+      name: s(card.name),
+      number: s(card.number),
+      setName: s(card.setName || card.releaseName),
+      setCode: '',
+      series: s(card.releaseName),
+      year: s(card.year),
       language: lang,
-      foil: foilTxt && foilTxt !== 'non-foil' && foilTxt !== 'no' && foilTxt !== 'false',
-      raw: idf
+      foil: foil,
+      parallel: parallelName,
+      rarity: s(fields.RARITY),
+      confidence: s(det.confidence),
+      alternatives: Array.isArray(card.suggestions) ? card.suggestions.length : 0,
+      graded: graded,
+      raw: card
     };
   }
 
-  // Gửi 1 ảnh (dataURL) lên Ximilar tcg_id. Tốn 10 credits/lần theo bảng giá của họ.
+  // Gửi 1 ảnh (dataURL) lên CardSight. 1 lần gọi = 1 lượt trong hạn mức gói
+  // (free: 750 lượt/tháng, tự reset đầu tháng).
   async function identifyCardByPhoto(dataURL) {
-    var token = getXimilarToken();
-    if (!token) throw new Error('Chưa có API token của Ximilar. Dán token vào ô phía trên trước.');
-    var b64 = String(dataURL || '').replace(/^data:[^,]*,/, '');
-    if (!b64) throw new Error('Ảnh không hợp lệ.');
+    var key = getCardSightKey();
+    if (!key) throw new Error('Chưa có API key của CardSight. Dán key vào ô phía trên trước.');
+    var blob = dataURLToBlob(dataURL);
+    if (!blob) throw new Error('Ảnh không hợp lệ.');
+    async function post(url) {
+      var fd = new FormData();
+      fd.append('image', blob, 'card.jpg');
+      return fetchWithTimeout(url, { method: 'POST', headers: { 'X-API-Key': key }, body: fd }, 45000);
+    }
     var res;
     try {
-      res = await fetchWithTimeout(ximilarUrl(), {
-        method: 'POST',
-        headers: { 'Authorization': 'Token ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: [{ _base64: b64 }] })
-      }, 45000);
+      res = await post(cardSightBase() + '/pokemon');
+      if (res.status === 404) res = await post(cardSightBase());
     } catch (e) {
-      throw new Error('Không gọi được Ximilar (' + (e && e.message ? e.message : 'lỗi mạng') + '). Nếu lỗi kiểu "Failed to fetch" lặp lại, có thể trình duyệt chặn CORS — báo lại cho Miso để đổi cách gọi qua proxy.');
+      throw new Error('Không gọi được CardSight (' + (e && e.message ? e.message : 'lỗi mạng') + '). Nếu lỗi kiểu "Failed to fetch" lặp lại, có thể trình duyệt chặn CORS — báo lại cho Miso.');
     }
     var json = null;
     try { json = await res.json(); } catch (e) { /* giữ null */ }
-    var detailTxt = '';
-    if (json) {
-      var d = json.detail || json.message || json.error || (Array.isArray(json.non_field_errors) ? json.non_field_errors.join(' ') : '');
-      if (d) detailTxt = ' Ximilar báo: "' + String(d) + '"';
-    }
-    if (res.status === 401 || res.status === 403) throw new Error('API token bị Ximilar từ chối (HTTP ' + res.status + ').' + detailTxt + ' Thường do: chưa xác nhận email đăng ký, copy sai token, hoặc gói Free không có quyền gọi API nhận diện thẻ.');
-    if (res.status === 402) throw new Error('Tài khoản Ximilar đã hết credits. Đợi tháng sau (gói free cấp lại) hoặc nâng gói.');
-    if (res.status === 429) throw new Error('Ximilar giới hạn tốc độ gọi. Đợi một chút rồi thử lại.');
-    if (!res.ok) throw new Error('Ximilar trả lỗi HTTP ' + res.status + (json && json.detail ? ': ' + json.detail : '') + '.');
-    var parsed = parseXimilarResult(json);
-    if (!parsed || !parsed.name) throw new Error('Ximilar không nhận diện được lá này. Thử chụp rõ hơn: đủ sáng, nền trơn, lá chiếm phần lớn khung hình.');
+    var serverMsg = json && (json.error || json.message) ? String(json.error || json.message) : '';
+    if (res.status === 401 || res.status === 403) throw new Error('API key bị CardSight từ chối (HTTP ' + res.status + ').' + (serverMsg ? ' CardSight báo: "' + serverMsg + '"' : '') + ' Kiểm tra lại key lấy từ trang API Keys trong tài khoản CardSight.');
+    if (res.status === 429) throw new Error('CardSight báo quá lượt cho phép (HTTP 429)' + (serverMsg ? ': "' + serverMsg + '"' : '') + '. Có thể đã hết 750 lượt free của tháng này, hoặc gọi quá nhanh — đợi tháng sau reset hoặc chuyển key khác.');
+    if (res.status === 413) throw new Error('Ảnh quá lớn với CardSight. Chọn ảnh nhỏ hơn rồi thử lại.');
+    if (!res.ok) throw new Error('CardSight trả lỗi HTTP ' + res.status + (serverMsg ? ': "' + serverMsg + '"' : '') + '.');
+    var parsed = parseCardSightResult(json);
+    if (!parsed || !parsed.name) throw new Error('CardSight không nhận diện được lá này. Thử chụp rõ hơn: đủ sáng, nền trơn, lá chiếm phần lớn khung hình.');
     return parsed;
   }
+
 
   // ---------- rao bán (listings, Phase 2 — quản lý trong app, chưa phải storefront) ----------
   var LISTING_STATUSES = ['draft', 'active', 'sold', 'hidden'];
@@ -1404,9 +1421,9 @@
     LISTING_STATUSES: LISTING_STATUSES, LISTING_STATUS_LABELS: LISTING_STATUS_LABELS,
     listingsOfCard: listingsOfCard, getListing: getListing,
     createListing: createListing, updateListing: updateListing, deleteListing: deleteListing,
-    getXimilarToken: getXimilarToken, setXimilarToken: setXimilarToken,
-    getXimilarTokens: getXimilarTokens, addXimilarToken: addXimilarToken, removeXimilarToken: removeXimilarToken,
-    identifyCardByPhoto: identifyCardByPhoto, parseXimilarResult: parseXimilarResult,
+    getCardSightKey: getCardSightKey, setCardSightKey: setCardSightKey,
+    getCardSightKeys: getCardSightKeys, addCardSightKey: addCardSightKey, removeCardSightKey: removeCardSightKey,
+    identifyCardByPhoto: identifyCardByPhoto, parseCardSightResult: parseCardSightResult,
     wipeAll: wipeAll, reseed: reseed, exportJSON: exportJSON
   };
 

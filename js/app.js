@@ -1246,33 +1246,33 @@
   }
 
   /* ================= VIEW: ĐƠN HÀNG ================= */
-  /* ================= VIEW: QUÉT THẺ (nhận diện từ ảnh — Ximilar) ================= */
+  /* ================= VIEW: QUÉT THẺ (nhận diện từ ảnh — CardSight AI) ================= */
   var scanState = { photo: '', result: null };
   function vQuet() {
-    var tokens = BCT.getXimilarTokens();
-    var active = BCT.getXimilarToken();
+    var tokens = BCT.getCardSightKeys();
+    var active = BCT.getCardSightKey();
     var html = '<h1 class="page-title">Quét thẻ bằng ảnh</h1>' +
-      '<p class="page-sub">Chụp hoặc tải ảnh 1 lá → AI (Ximilar) nhận diện tên, set, số thứ tự → bạn kiểm tra lại rồi lưu vào kho kèm lô nhập. Mỗi lần nhận diện tốn 10 credits trong tài khoản Ximilar.</p>';
-    html += '<section class="panel"><h3 style="margin-top:0">API token Ximilar' + (tokens.length ? ' (' + tokens.length + ' token)' : '') + '</h3>';
+      '<p class="page-sub">Chụp hoặc tải ảnh 1 lá → AI (CardSight) nhận diện tên, set, số thứ tự → bạn kiểm tra lại rồi lưu vào kho kèm lô nhập. Mỗi lần nhận diện tính 1 lượt trong tài khoản CardSight (gói free có 750 lượt/tháng, tự làm mới đầu tháng).</p>';
+    html += '<section class="panel"><h3 style="margin-top:0">API key CardSight' + (tokens.length ? ' (' + tokens.length + ' key)' : '') + '</h3>';
     if (tokens.length) {
-      html += '<div class="xim-list">' + tokens.map(function (t, i) {
+      html += '<div class="cs-list">' + tokens.map(function (t, i) {
         var isActive = t.token === active;
-        return '<div class="xim-row"><span class="xim-label">' + esc(t.label) + '</span><span class="xim-mask">••••' + esc(t.token.slice(-4)) + '</span>' +
-          (isActive ? '<span class="tag ok">Đang dùng</span>' : '<button type="button" class="btn secondary btn-sm" data-xim-use="' + i + '">Dùng token này</button>') +
-          '<button type="button" class="btn secondary btn-sm" data-xim-del="' + i + '">Xóa</button></div>';
+        return '<div class="cs-row"><span class="cs-label">' + esc(t.label) + '</span><span class="cs-mask">••••' + esc(t.token.slice(-4)) + '</span>' +
+          (isActive ? '<span class="tag ok">Đang dùng</span>' : '<button type="button" class="btn secondary btn-sm" data-cs-use="' + i + '">Dùng key này</button>') +
+          '<button type="button" class="btn secondary btn-sm" data-cs-del="' + i + '">Xóa</button></div>';
       }).join('') + '</div>';
     } else {
-      html += '<p class="panel-note">Chưa có token nào. Đăng ký tài khoản free tại <b>app.ximilar.com</b> (không cần thẻ thanh toán), vào mục API của tài khoản để lấy <b>API token</b> rồi dán vào đây.</p>';
+      html += '<p class="panel-note">Chưa có key nào. Đăng ký tài khoản free tại <b>cardsight.ai</b> (không cần thẻ thanh toán), vào trang <b>API Keys</b> trong tài khoản để lấy <b>API key</b> rồi dán vào đây.</p>';
     }
-    html += '<div class="form-grid"><div class="field"><label>Tên gợi nhớ</label><input id="xim-label" placeholder="vd Tài khoản chính"></div>' +
-      '<div class="field"><label>API token</label><input type="password" id="xim-token" placeholder="Dán API token" autocomplete="off"></div></div>' +
-      '<div class="form-actions"><button type="button" class="btn" id="xim-save">' + (tokens.length ? 'Thêm token' : 'Lưu token') + '</button></div>' +
-      '<p class="panel-note">Có thể lưu nhiều token (nhiều tài khoản) và chuyển qua lại. Token chỉ lưu trong trình duyệt này — không đưa lên GitHub, không ai khác thấy được. Đổi máy hoặc đổi trình duyệt sẽ phải dán lại.</p></section>';
+    html += '<div class="form-grid"><div class="field"><label>Tên gợi nhớ</label><input id="cs-label" placeholder="vd Tài khoản chính"></div>' +
+      '<div class="field"><label>API key</label><input type="password" id="cs-key" placeholder="Dán API key" autocomplete="off"></div></div>' +
+      '<div class="form-actions"><button type="button" class="btn" id="cs-save">' + (tokens.length ? 'Thêm key' : 'Lưu key') + '</button></div>' +
+      '<p class="panel-note">Có thể lưu nhiều key (nhiều tài khoản) và chuyển qua lại. Key chỉ lưu trong trình duyệt này — không đưa lên GitHub, không ai khác thấy được. Đổi máy hoặc đổi trình duyệt sẽ phải dán lại.</p></section>';
     if (!active) return html;
     html += '<section class="panel"><h3 style="margin-top:0">Chọn ảnh lá bài</h3>' +
       '<label class="img-drop" id="scan-drop">📷 Chụp / chọn ảnh lá bài<input type="file" id="scan-file" accept="image/*" hidden></label>' +
       '<div id="scan-preview"></div>' +
-      '<div class="form-actions"><button type="button" class="btn" id="scan-go" disabled>Nhận diện lá này (10 credits)</button></div>' +
+      '<div class="form-actions"><button type="button" class="btn" id="scan-go" disabled>Nhận diện lá này (1 lượt)</button></div>' +
       '<div id="scan-result"></div></section>';
     return html;
   }
@@ -1284,7 +1284,7 @@
       var sel = res.foil && v === 'Holo' ? ' selected' : (!res.foil && v === 'Normal' ? ' selected' : '');
       return '<option value="' + esc(v) + '"' + sel + '>' + esc((BCT.VARIANT_LABELS && BCT.VARIANT_LABELS[v]) || v) + '</option>';
     }).join('');
-    var rarOpts = BCT.RARITIES.map(function (r) { return '<option value="' + esc(r) + '">' + esc(r) + '</option>'; }).join('');
+    var rarOpts = BCT.RARITIES.map(function (r) { return '<option value="' + esc(r) + '"' + (res.rarity && r.toLowerCase() === String(res.rarity).toLowerCase() ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join('');
     var condOpts = BCT.CONDITIONS.map(function (cd) { return '<option' + (cd === 'New Mint' ? ' selected' : '') + '>' + esc(cd) + '</option>'; }).join('');
     var today = new Date(); var pad = function (n) { return (n < 10 ? '0' : '') + n; };
     var todayStr = today.getFullYear() + '-' + pad(today.getMonth() + 1) + '-' + pad(today.getDate());
@@ -1293,6 +1293,8 @@
       '<div class="scan-meta">' + esc([res.setName, res.number ? 'số ' + res.number : '', res.year, res.series].filter(Boolean).join(' · ')) + '</div>' +
       (matched ? '<div class="scan-meta">Khớp set trong dữ liệu: <b>' + esc(matched.name) + '</b> — ảnh chính thức sẽ tự hiển thị.</div>'
                : '<div class="scan-meta warn">Chưa khớp được set "' + esc(res.setName || '?') + '" với dữ liệu TCGdex — kiểm tra lại tên set ở form dưới, hoặc lá này sẽ dùng ảnh chụp làm ảnh chính.</div>') +
+      (res.confidence ? '<div class="scan-meta">Độ tin cậy của AI: <b>' + esc(res.confidence) + '</b>' + (res.alternatives ? ' · có ' + res.alternatives + ' phương án khác — nếu thấy sai, sửa thẳng ở form dưới' : '') + (res.parallel ? ' · Biến thể gợi ý: ' + esc(res.parallel) : '') + '</div>' : '') +
+      (res.graded ? '<div class="scan-meta">Lá đang trong slab: <b>' + esc(res.graded.org) + ' ' + esc(res.graded.score) + '</b>' + (res.graded.cert ? ' · cert ' + esc(res.graded.cert) : '') + ' — thông tin này sẽ tự lưu kèm card.</div>' : '') +
       '</div></div>';
     html += '<form id="f-scan"><div class="form-grid">' +
       fld('Tên lá *', '<input id="s-name" required value="' + esc(res.name) + '">') +
@@ -1335,10 +1337,13 @@
         if (dup) {
           cardId = dup.id;
         } else {
+          var g = scanState.result && scanState.result.graded;
           var card = await BCT.addCard(S, {
             name: name, set: setName, setId: setHit ? setHit.id : null,
             number: num, rarity: $('s-rarity').value, condition: $('s-cond').value,
-            language: $('s-lang').value || 'en', storageLocation: '', note: 'Nhập qua Quét thẻ (Ximilar)'
+            language: $('s-lang').value || 'en', storageLocation: '', note: 'Nhập qua Quét thẻ (CardSight)',
+            graded: g ? { org: g.org, score: g.score || '' } : null,
+            certNumber: g ? (g.cert || '') : ''
           });
           cardId = card.id; created = true;
         }
@@ -1723,29 +1728,29 @@
     }
 
     if (base === 'quet') {
-      var xSave = $('xim-save');
+      var xSave = $('cs-save');
       if (xSave) xSave.addEventListener('click', function () {
         try {
-          BCT.addXimilarToken($('xim-label').value, $('xim-token').value);
-          toast('Đã lưu token và đặt làm token đang dùng.');
+          BCT.addCardSightKey($('cs-label').value, $('cs-key').value);
+          toast('Đã lưu key và đặt làm key đang dùng.');
           render();
         } catch (err) { toast(err.message, 'err'); }
       });
-      Array.prototype.forEach.call(document.querySelectorAll('[data-xim-use]'), function (btn) {
+      Array.prototype.forEach.call(document.querySelectorAll('[data-cs-use]'), function (btn) {
         btn.addEventListener('click', function () {
-          var list = BCT.getXimilarTokens();
-          var t = list[Number(btn.getAttribute('data-xim-use'))];
-          if (t) { BCT.setXimilarToken(t.token); toast('Đã chuyển sang token "' + t.label + '".'); render(); }
+          var list = BCT.getCardSightKeys();
+          var t = list[Number(btn.getAttribute('data-cs-use'))];
+          if (t) { BCT.setCardSightKey(t.token); toast('Đã chuyển sang key "' + t.label + '".'); render(); }
         });
       });
-      Array.prototype.forEach.call(document.querySelectorAll('[data-xim-del]'), function (btn) {
+      Array.prototype.forEach.call(document.querySelectorAll('[data-cs-del]'), function (btn) {
         btn.addEventListener('click', function () {
-          var list = BCT.getXimilarTokens();
-          var t = list[Number(btn.getAttribute('data-xim-del'))];
+          var list = BCT.getCardSightKeys();
+          var t = list[Number(btn.getAttribute('data-cs-del'))];
           if (!t) return;
-          if (!confirm('Xóa token "' + t.label + '" khỏi máy này?')) return;
-          BCT.removeXimilarToken(t.token);
-          toast('Đã xóa token "' + t.label + '".');
+          if (!confirm('Xóa key "' + t.label + '" khỏi máy này?')) return;
+          BCT.removeCardSightKey(t.token);
+          toast('Đã xóa key "' + t.label + '".');
           render();
         });
       });
@@ -1772,7 +1777,7 @@
         }).catch(function (e) {
           toast(e.message || 'Nhận diện thất bại.', 'err');
         }).then(function () {
-          scanGo.disabled = false; scanGo.textContent = 'Nhận diện lá này (10 credits)';
+          scanGo.disabled = false; scanGo.textContent = 'Nhận diện lá này (1 lượt)';
         });
       });
     }
