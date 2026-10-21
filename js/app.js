@@ -297,7 +297,10 @@
   }
   window.addEventListener('hashchange', render);
   window.addEventListener('bct:themechange', function () {
-    if (S) render();
+    var r = route();
+    // Only the inventory list changes its HTML layout. Other screens switch
+    // with CSS so an unsaved form keeps its values and focus.
+    if (S && r.segs[0] === 'kho' && !r.segs[1]) render();
   });
 
   /* ================= VIEW: DASHBOARD ================= */
@@ -438,7 +441,7 @@
   function isHoenn() { return document.documentElement.classList.contains('theme-rs'); }
   var rsSelectedCardId = null;
   var rsPage = 0;
-  var RS_PAGE_SIZE = 5;
+  var RS_PAGE_SIZE = 4;
   var khoFilter = { q: '', set: '', rarity: '', sort: 'name', lang: 'all', holo: '', loc: '', misprintOnly: false, gradedOnly: false };
 
   function langChip(label, val) {
@@ -582,7 +585,7 @@
     var html = '<table class="rs-inventory-table"><thead><tr><th scope="col">Lá bài</th><th scope="col">Bộ / số</th><th scope="col">Tồn</th><th scope="col">Giá tham khảo</th></tr></thead><tbody>';
     visible.forEach(function (c) {
       var rows = BCT.marketSourceRows(c) || [];
-      html += '<tr class="' + (c.id === rsSelectedCardId ? 'rs-row-selected' : '') + '"><td><button type="button" class="rs-card-select" data-rs-card="' + BCT.esc(c.id) + '" aria-pressed="' + (c.id === rsSelectedCardId) + '">' +
+      html += '<tr class="' + (c.id === rsSelectedCardId ? 'rs-row-selected' : '') + '"><td><button type="button" class="rs-card-select" data-rs-card="' + BCT.esc(c.id) + '" aria-label="Xem nhanh ' + BCT.esc(c.name) + '" aria-pressed="' + (c.id === rsSelectedCardId) + '">' +
         '<span class="rs-row-cursor" aria-hidden="true">▶</span>' + cardImgTag(c, 'low', 'rs-card-thumb', c.name) +
         '<span class="rs-row-name">' + BCT.esc(c.name) + '<small>' + BCT.esc(c.rarity || BCT.LANGUAGES[c.language] || 'English') + '</small></span></button></td>' +
         '<td><span>' + BCT.esc(c.set || 'Chưa phân bộ') + '</span><small class="rs-card-number">' + BCT.esc(c.number || '—') + '</small></td>' +
