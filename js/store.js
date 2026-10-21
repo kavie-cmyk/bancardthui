@@ -1090,10 +1090,13 @@
     var saveDiag = function () {
       lastPriceDiag = { card: String(setId).trim() + '-' + raw, tries: diagTries.slice() };
     };
+    // Chạy SONG SONG nguồn lấp pokemontcg.io ngay từ đầu: TCGdex về đủ thì
+    // khỏi chờ; thiếu nguồn thì phần lấp đã đi trước một đoạn — nhanh hơn
+    // hẳn kiểu gọi tuần tự + thử lại nhiều vòng như trước.
+    var ioPromise = fetchPokemonTcgIoPricing(setId, number).catch(function () { return []; });
     for (var c = 0; c < candidates.length; c++) {
-      for (var i = 0; i < 3; i++) {
-        // URL kèm mã ngẫu nhiên mỗi lần gọi + cache:'no-store' để né mọi lớp
-        // cache (trình duyệt/CDN) — đã gặp trường hợp cache trả bản thiếu TCGplayer.
+      for (var i = 0; i < 2; i++) {
+        // URL kèm mã ngẫu nhiên mỗi lần gọi + cache:'no-store' để né mọi lớp cache.
         var url = 'https://api.tcgdex.net/v2/en/cards/' +
           encodeURIComponent(String(setId).trim()) + '-' +
           encodeURIComponent(candidates[c]) + '?cb=' + Date.now() + '_' + i;
@@ -1108,20 +1111,22 @@
           var out = parsePricingSources(j.pricing);
           diagTries.push(candidates[c] + ' → HTTP 200, ' + pricingDiagLine(j.pricing) + ', ra ' + out.length + ' nguồn');
           if (!best || out.length > best.length) best = out;
-          if (out.length >= 2) { saveDiag(); return out; }
-          // Mới được <2 nguồn: gọi lại lần nữa bằng URL mới trước khi chấp nhận.
-          if (i < 2) await new Promise(function (r) { setTimeout(r, 600); });
+          break; // Đã có trả lời 200: dù thiếu nguồn cũng KHÔNG gọi lại TCGdex
+          // (phía server đã quyết định phần thiếu) — để nguồn lấp lo.
         } catch (err) {
           lastErr = err;
           diagTries.push(candidates[c] + ' → lỗi: ' + (err.message || err));
-          if (i < 2) await new Promise(function (r) { setTimeout(r, 800 * (i + 1)); });
+          if (i < 1) await new Promise(function (r) { setTimeout(r, 600); });
         }
       }
       if (best && best.length) break;
     }
     var result = best || [];
     if (result.length < 2) {
-      result = await fillMissingSources(result, setId, number);
+      var io = await ioPromise;
+      var have = {};
+      result.forEach(function (e) { have[e.source] = true; });
+      io.forEach(function (e) { if (!have[e.source]) { result.push(e); have[e.source] = true; } });
       diagTries.push('lấp pokemontcg.io: ' + (lastIoDiag || '?') + ' → tổng ' + result.length + ' nguồn');
     }
     saveDiag();
@@ -1146,12 +1151,7 @@
         encodeURIComponent(String(setId).trim()) + '-' +
         encodeURIComponent(candidates[c]);
       try {
-        // pokemontcg.io khá chậm → timeout 30s và thử lại 1 lần khi lỗi mạng.
-        var res = null;
-        for (var a = 0; a < 2; a++) {
-          try { res = await fetchWithTimeout(url, { cache: 'no-store' }, 30000); break; }
-          catch (e1) { if (a === 1) throw e1; await new Promise(function (r) { setTimeout(r, 800); }); }
-        }
+        var res = await fetchWithTimeout(url, { cache: 'no-store' }, 20000);
         if (res.status === 404) { lastIoDiag = 'HTTP 404'; continue; }
         if (!res.ok) { lastIoDiag = 'HTTP ' + res.status; return []; }
         var j = await res.json();
@@ -1179,18 +1179,7 @@
 
   function isoDateStr(s) { return s ? String(s).replace(/\//g, '-') : null; }
 
-  async function fillMissingSources(entries, setId, number) {
-    var have = {};
-    entries.forEach(function (e) { have[e.source] = true; });
-    if (have.cardmarket && have.tcgplayer) return entries;
-    try {
-      var fb = await fetchPokemonTcgIoPricing(setId, number);
-      fb.forEach(function (e) {
-        if (!have[e.source]) { entries.push(e); have[e.source] = true; }
-      });
-    } catch (e) { /* giữ nguyên kết quả TCGdex */ }
-    return entries;
-  }
+
 
   // eBay: SLOT chờ duyệt App ID (dev kavie2004). Hiện tại trả [] êm thấm.
   // Khi có App ID, viết body theo hướng dẫn:
