@@ -6,8 +6,10 @@
 <title>Bán Card Thui — Quản lý kho Pokémon TCG</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20261021p">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=20261021q">
+<link rel="stylesheet" href="css/theme-rs.css?v=20261021q">
+<script>try { if (localStorage.getItem('bct_theme') === 'rs') document.documentElement.classList.add('theme-rs'); } catch (e) {}</script>
 </head>
 <body>
 <div id="grain"></div>
@@ -19,6 +21,7 @@
       <span class="brand-name">Bán Card <em>Thui</em></span>
     </a>
     <nav class="nav" id="nav"></nav>
+    <button class="ball-toggle" id="btn-theme" type="button" title="Đổi giao diện: Pokémon Ruby/Sapphire" aria-label="Đổi giao diện Ruby Sapphire"><span></span></button>
     <span class="seed-pill" id="seed-pill" hidden>Dữ liệu mẫu</span>
     <button class="btn-ghost" id="btn-seed-toggle" hidden></button>
     <button class="btn-ghost" id="btn-export" title="Tải backup JSON toàn bộ dữ liệu">Xuất JSON</button>
@@ -30,12 +33,18 @@
 <div class="toast" id="toast"></div>
 <div class="loading" id="loading" hidden><div class="spinner"></div><div>Đang tải…</div></div>
 
-<script src="js/config.js?v=20261021p"></script>
-<script src="js/auth.js?v=20261021p"></script>
-<script src="js/db.js?v=20261021p"></script>
-<script src="js/sets-db.js?v=20261021p"></script>
-<script src="js/store.js?v=20261021p"></script>
-<script src="js/seed.js?v=20261021p"></script>
-<script src="js/app.js?v=20261021p"></script>
+<script src="js/config.js?v=20261021q"></script>
+<script src="js/auth.js?v=20261021q"></script>
+<script src="js/db.js?v=20261021q"></script>
+<script src="js/sets-db.js?v=20261021q"></script>
+<script src="js/store.js?v=20261021q"></script>
+<script src="js/seed.js?v=20261021q"></script>
+<script src="js/app.js?v=20261021q"></script>
+<script>
+document.getElementById('btn-theme').addEventListener('click', function () {
+  var on = document.documentElement.classList.toggle('theme-rs');
+  try { localStorage.setItem('bct_theme', on ? 'rs' : 'vault'); } catch (e) {}
+});
+</script>
 </body>
 </html>

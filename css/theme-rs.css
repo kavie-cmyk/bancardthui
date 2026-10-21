@@ -1,0 +1,216 @@
+/* Bán Card Thui — theme "Hoenn" (Pokémon Ruby/Sapphire, Gen 3 in-game UI)
+ * Lớp phủ bật/tắt bằng class .theme-rs trên <html> (nút Poké Ball ở topbar,
+ * lưu trong localStorage 'bct_theme'). Tắt = giao diện "collector's vault" cũ.
+ * Chỉ thay diện mạo: biến màu + khung hộp thoại GBA + font pixel VT323.
+ */
+html.theme-rs {
+  --bg: #a8d8f0;
+  --bg-deep: #7ec0e8;
+  --panel: #fdfbf2;
+  --panel-2: #f3eedc;
+  --line: rgba(43, 43, 58, 0.4);
+  --line-soft: rgba(43, 43, 58, 0.18);
+  --gold: #c8281c;
+  --gold-soft: #d8382a;
+  --gold-dim: #8a5a3a;
+  --ink: #2b2b3a;
+  --muted: #55556a;
+  --faint: #8a8a9c;
+  --green: #2e9e4f;
+  --red: #d8382a;
+  --radius: 10px;
+  --font-display: "VT323", "Space Grotesk", monospace;
+  --font-body: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "VT323", "IBM Plex Mono", monospace;
+  --rs-navy: #34344a;
+  --rs-navy-deep: #23233a;
+  --rs-paper: #fdfbf2;
+  --rs-ruby: #d8382a;
+  --rs-sapphire: #2850a8;
+  --rs-sun: #f8c828;
+}
+
+html.theme-rs body {
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.35) 1.5px, transparent 1.6px) 0 0 / 22px 22px,
+    linear-gradient(180deg, #7ec8f0 0%, #a8d8f0 40%, #dff2fa 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+}
+html.theme-rs #grain { display: none; }
+html.theme-rs ::selection { background: rgba(216, 56, 42, 0.3); }
+
+/* ---------- topbar kiểu thanh menu game ---------- */
+html.theme-rs .topbar {
+  background: var(--rs-navy-deep);
+  border-bottom: 3px solid #14142a;
+  backdrop-filter: none;
+}
+html.theme-rs .brand-name {
+  font-family: var(--font-display);
+  font-size: 24px; letter-spacing: 1px; color: #fdfbf2;
+}
+html.theme-rs .brand-name em { color: var(--rs-sun); }
+html.theme-rs .brand-mark {
+  background: var(--rs-paper);
+  border: 2px solid #14142a;
+  border-radius: 50%;
+  color: var(--rs-ruby);
+}
+html.theme-rs .nav a {
+  font-family: var(--font-display);
+  font-size: 18px; letter-spacing: 0.5px;
+  color: #c9c9da; border-radius: 6px;
+}
+html.theme-rs .nav a:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
+html.theme-rs .nav a.active {
+  color: var(--ink); background: var(--rs-paper);
+  border-color: #14142a;
+}
+html.theme-rs .nav a.active::before { content: "▶"; color: var(--rs-ruby); font-size: 12px; }
+html.theme-rs .topbar .btn-ghost { color: #e8e8f2; border-color: rgba(255, 255, 255, 0.35); font-family: var(--font-display); font-size: 16px; }
+html.theme-rs .topbar .btn-ghost:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+html.theme-rs .seed-pill {
+  background: var(--rs-sun); color: var(--ink);
+  border: 2px solid #14142a; border-radius: 6px; font-family: var(--font-display); font-size: 14px;
+}
+
+/* nút Poké Ball đổi theme (hiện ở mọi giao diện) */
+.ball-toggle {
+  width: 34px; height: 34px; flex: none; cursor: pointer; padding: 0;
+  border-radius: 50%; border: 2px solid #14142a; position: relative;
+  background: linear-gradient(180deg, #e8483a 0 46%, #2b2b3a 46% 54%, #fdfbf2 54% 100%);
+  box-shadow: 0 2px 0 rgba(20, 20, 42, 0.6);
+}
+.ball-toggle span {
+  position: absolute; left: 50%; top: 50%; width: 9px; height: 9px;
+  transform: translate(-50%, -50%);
+  background: #fdfbf2; border: 2px solid #2b2b3a; border-radius: 50%;
+}
+.ball-toggle:hover { filter: brightness(1.08); }
+.ball-toggle:active { transform: translateY(2px); box-shadow: none; }
+
+/* ---------- khung hộp thoại GBA cho panel ---------- */
+html.theme-rs .panel,
+html.theme-rs .login-panel,
+html.theme-rs .confirm-box,
+html.theme-rs .kpi {
+  background: var(--rs-paper);
+  border: 3px solid var(--rs-navy);
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px #fffdf4, 0 0 0 4px rgba(52, 52, 74, 0.45), 6px 6px 0 rgba(35, 35, 58, 0.22);
+}
+html.theme-rs .panel-title,
+html.theme-rs .page-title {
+  font-family: var(--font-display);
+  letter-spacing: 0.5px; color: var(--ink);
+}
+html.theme-rs .panel-title { font-size: 23px; }
+html.theme-rs .page-title { font-size: 36px; }
+html.theme-rs .page-sub { color: var(--muted); }
+html.theme-rs .panel-head { border-bottom: 2px dashed rgba(43, 43, 58, 0.25); }
+
+/* ---------- nút bấm kiểu game (bóng cứng, nhấn lún) ---------- */
+html.theme-rs .btn {
+  font-family: var(--font-display); font-size: 18px; letter-spacing: 0.5px;
+  background: var(--rs-ruby); color: #fff8e8;
+  border: 2px solid var(--rs-navy-deep); border-radius: 8px;
+  box-shadow: 0 3px 0 var(--rs-navy-deep);
+}
+html.theme-rs .btn:hover { filter: brightness(1.07); }
+html.theme-rs .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--rs-navy-deep); }
+html.theme-rs .btn.secondary {
+  background: var(--rs-paper); color: var(--ink);
+}
+html.theme-rs .btn-ghost { font-family: var(--font-display); font-size: 16px; border-radius: 6px; }
+html.theme-rs .icon-btn { border: 2px solid var(--rs-navy); background: var(--rs-paper); border-radius: 6px; color: var(--ink); }
+
+/* ---------- ô nhập liệu ---------- */
+html.theme-rs .field input,
+html.theme-rs .field select,
+html.theme-rs .field textarea,
+html.theme-rs input,
+html.theme-rs select,
+html.theme-rs textarea {
+  background: #fffdf6; color: var(--ink);
+  border: 2px solid #77778c; border-radius: 6px;
+}
+html.theme-rs .field input:focus,
+html.theme-rs .field select:focus,
+html.theme-rs input:focus,
+html.theme-rs select:focus,
+html.theme-rs textarea:focus {
+  border-color: var(--rs-sapphire);
+  box-shadow: 0 0 0 3px rgba(40, 80, 168, 0.25);
+  outline: none;
+}
+html.theme-rs .field label,
+html.theme-rs .kpi-label,
+html.theme-rs .cs-label {
+  font-family: var(--font-display); font-size: 17px; letter-spacing: 0.5px; color: var(--muted);
+}
+html.theme-rs .hint { color: var(--faint); }
+
+/* ---------- số liệu / hero ---------- */
+html.theme-rs .kpi-value, html.theme-rs .mkt-price {
+  font-family: var(--font-display); color: var(--rs-ruby);
+}
+html.theme-rs .kpi-value { font-size: 38px; }
+html.theme-rs .hero {
+  background: linear-gradient(120deg, #2850a8 0%, #2e7cb8 55%, #3fa7a0 100%);
+  border: 3px solid var(--rs-navy-deep);
+  box-shadow: 0 0 0 2px #fffdf4, 0 0 0 4px rgba(52, 52, 74, 0.45), 6px 6px 0 rgba(35, 35, 58, 0.22);
+  color: #fdfbf2;
+}
+html.theme-rs .hero-title { font-family: var(--font-display); font-size: 40px; letter-spacing: 0.5px; }
+html.theme-rs .hero-kicker { font-family: var(--font-display); font-size: 18px; color: var(--rs-sun); }
+html.theme-rs .hero-sub { color: #dceefb; }
+
+/* ---------- bảng & danh sách ---------- */
+html.theme-rs table { border-collapse: collapse; }
+html.theme-rs th {
+  font-family: var(--font-display); font-size: 17px; letter-spacing: 0.5px;
+  background: #e8e4d0; color: var(--ink);
+  border-bottom: 2px solid var(--rs-navy);
+}
+html.theme-rs td { border-bottom: 1px dashed rgba(43, 43, 58, 0.25); }
+html.theme-rs tbody tr:hover { background: #fff3b8; }
+html.theme-rs .chip {
+  background: var(--panel-2); color: var(--ink);
+  border: 2px solid #77778c; border-radius: 5px;
+  font-family: var(--font-display); font-size: 15px;
+}
+html.theme-rs .mkt-src {
+  background: var(--panel-2);
+  border: 2px solid #a9a9bc; border-radius: 8px;
+}
+html.theme-rs .card-grid > * {
+  background: var(--rs-paper);
+  border: 2px solid var(--rs-navy); border-radius: 8px;
+  box-shadow: 3px 3px 0 rgba(35, 35, 58, 0.2);
+}
+html.theme-rs .detail-img {
+  border: 3px solid var(--rs-navy); border-radius: 8px;
+  background: conic-gradient(#edead8 25%, #fdfbf2 0 50%, #edead8 0 75%, #fdfbf2 0) 0 0 / 16px 16px;
+}
+html.theme-rs .num-cell { background: #fffdf6; border: 2px solid #a9a9bc; border-radius: 6px; }
+html.theme-rs .backlink { font-family: var(--font-display); font-size: 18px; color: var(--rs-sapphire); }
+html.theme-rs .empty { color: var(--muted); }
+html.theme-rs .alert { background: #ffe9e4; border: 2px solid var(--rs-ruby); color: var(--ink); border-radius: 8px; }
+html.theme-rs .img-drop { border: 2px dashed var(--rs-navy); background: rgba(253, 251, 242, 0.6); }
+html.theme-rs .fifo-box { background: var(--panel-2); border: 2px solid #a9a9bc; border-radius: 8px; }
+
+/* ---------- toast kiểu hộp thoại game ---------- */
+html.theme-rs .toast {
+  background: var(--rs-paper); color: var(--ink);
+  border: 3px solid var(--rs-navy); border-radius: 10px;
+  box-shadow: 0 0 0 2px #fffdf4, 0 0 0 4px rgba(52, 52, 74, 0.45), 6px 6px 0 rgba(35, 35, 58, 0.25);
+  font-family: var(--font-display); font-size: 19px;
+}
+html.theme-rs .spinner { border-color: rgba(43, 43, 58, 0.25); border-top-color: var(--rs-ruby); }
+html.theme-rs .loading { color: var(--ink); font-family: var(--font-display); font-size: 19px; }
+html.theme-rs .login-title { font-family: var(--font-display); font-size: 32px; }
+html.theme-rs .login-sub { color: var(--muted); }
+html.theme-rs ::-webkit-scrollbar { width: 12px; height: 12px; }
+html.theme-rs ::-webkit-scrollbar-track { background: #dff2fa; }
+html.theme-rs ::-webkit-scrollbar-thumb { background: var(--rs-navy); border-radius: 6px; border: 2px solid #dff2fa; }
