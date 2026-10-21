@@ -1055,7 +1055,10 @@
   // Zac yêu cầu bỏ kiểu vá chồng vá cũ, làm lại gọn: MỘT luồng tuyến tính,
   // thử lần lượt từng bước, bước nào cho đủ 2 nguồn (Cardmarket +
   // TCGplayer) thì dừng ngay:
-  //   1) TCGdex trực tiếp — nguồn chính, phần lớn thời gian đủ cả hai.
+  //   1) TCGdex trực tiếp — nguồn chính. Hỏi lần lượt 3 bản sao phân phối
+  //      (/en → /fr → /de): cùng dữ liệu gốc nhưng là các bản sao khác
+  //      nhau, có bản bị trống mục TCGplayer theo từng lá/từng lúc (đã gặp
+  //      với sv08-226: phía Zac + Supabase trúng bản trống, bản khác đủ).
   //   2) pokemontcg.io trực tiếp — nguồn ĐỘC LẬP với TCGdex, dùng MÃ SET
   //      RIÊNG của họ (sv8 thay vì sv08 — xem ioSetIdCandidates).
   //   3) price-proxy: máy chủ Supabase đi lấy TCGdex hộ — 1 lần gọi.
@@ -1065,18 +1068,18 @@
   // là 1 dòng ngắn cho mỗi bước đã chạy (BCT.getLastPriceDiag).
   function priceSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-  // Một lần gọi TCGdex trực tiếp. localId của TCGdex KHÔNG đệm số 0
-  // ("swsh7-49" chứ không "swsh7-049") trong khi app lưu số có đệm ("049")
-  // → thử bản không đệm trước, 404 mới thử bản gốc. Số lẫn chữ (promo
-  // "SWSH230") giữ nguyên. Trả {entries, note} — không ném lỗi ra ngoài.
-  async function tcgdexDirectOnce(setId, number) {
+  // Một lần gọi TCGdex ở MỘT bản ngôn ngữ. localId của TCGdex KHÔNG đệm
+  // số 0 ("swsh7-49" chứ không "swsh7-049") trong khi app lưu số có đệm
+  // ("049") → thử bản không đệm trước, 404 mới thử bản gốc. Số lẫn chữ
+  // (promo "SWSH230") giữ nguyên. Trả {entries, note} — không ném lỗi.
+  async function tcgdexLocaleFetch(locale, setId, number) {
     var raw = String(number).trim();
     var nums = [];
     var n = parseCardNumber(raw);
     if (/^\d+$/.test(raw) && n != null && String(n) !== raw) nums.push(String(n));
     nums.push(raw);
     for (var i = 0; i < nums.length; i++) {
-      var url = 'https://api.tcgdex.net/v2/en/cards/' +
+      var url = 'https://api.tcgdex.net/v2/' + locale + '/cards/' +
         encodeURIComponent(String(setId).trim()) + '-' +
         encodeURIComponent(nums[i]) + '?cb=' + Date.now();
       try {
@@ -1086,12 +1089,32 @@
         var j = await res.json();
         var entries = parsePricingSources(j.pricing);
         var hasTp = entries.some(function (e) { return e.source === 'tcgplayer'; });
-        return { entries: entries, note: 'HTTP 200, ' + entries.length + ' nguồn (TCGplayer: ' + (hasTp ? 'có' : 'TRỐNG') + ')' };
+        return { entries: entries, note: 'HTTP 200, TCGplayer: ' + (hasTp ? 'có' : 'TRỐNG') };
       } catch (e) {
-        if (i === nums.length - 1) return { entries: [], note: 'lỗi mạng: ' + (e.message || e) };
+        if (i === nums.length - 1) return { entries: [], note: 'lỗi mạng' };
       }
     }
-    return { entries: [], note: 'HTTP 404 (TCGdex không có lá này)' };
+    return { entries: [], note: 'HTTP 404' };
+  }
+
+  // Bước 1 của luồng kéo giá: hỏi TCGdex lần lượt ở các bản sao /en, /fr,
+  // /de — gộp phần còn thiếu giữa các bản, có đủ TCGplayer thì dừng sớm.
+  async function tcgdexDirectOnce(setId, number) {
+    var locales = ['en', 'fr', 'de'];
+    var merged = {};
+    var notes = [];
+    for (var li = 0; li < locales.length; li++) {
+      var r = await tcgdexLocaleFetch(locales[li], setId, number);
+      notes.push('/' + locales[li] + ' ' + r.note);
+      (r.entries || []).forEach(function (e) {
+        if (e && e.source && !merged[e.source]) merged[e.source] = e;
+      });
+      if (merged.tcgplayer) break;
+    }
+    return {
+      entries: Object.keys(merged).map(function (k) { return merged[k]; }),
+      note: notes.join(' · ')
+    };
   }
 
   async function fetchTcgdexPricing(setId, number) {
