@@ -193,6 +193,7 @@
     { path: '#/sets', label: 'Bộ sưu tập', icon: IC.layers },
     { path: '#/nhap', label: 'Nhập kho', icon: IC.plus },
     { path: '#/ban', label: 'Bán hàng', icon: IC.tag },
+    { path: '#/rao', label: 'Rao bán', icon: IC.coin },
     { path: '#/donhang', label: 'Đơn hàng', icon: IC.receipt }
   ];
 
@@ -267,6 +268,7 @@
     else if (base === 'sets') app.innerHTML = r.segs[1] === 'manage' ? vSetManage(r.query) : (r.segs.length > 1 ? vSetDetail(decodeURIComponent(r.segs.slice(1).join('/'))) : vSets());
     else if (base === 'nhap') app.innerHTML = vNhap(r.query);
     else if (base === 'ban') app.innerHTML = vBan(r.query.card || '');
+    else if (base === 'rao') app.innerHTML = vListings(r.query);
     else if (base === 'donhang') app.innerHTML = r.segs[1] ? vOrderDetail(r.segs[1]) : vDonHang();
     else app.innerHTML = vDashboard();
     bind(base, r);
@@ -591,6 +593,7 @@
     html += '<div class="form-actions" style="margin-top:6px">' +
       '<a class="btn secondary" href="#/nhap?card=' + c.id + '" style="text-decoration:none">' + IC.plus + ' Nhập thêm lô</a>' +
       '<a class="btn" href="#/ban?card=' + c.id + '" style="text-decoration:none">' + IC.tag + ' Tạo đơn bán</a>' +
+      '<a class="btn secondary" href="#/rao?card=' + c.id + '" style="text-decoration:none">' + IC.coin + ' Rao bán lá này</a>' +
       '<a class="btn secondary" href="#/kho/' + c.id + '/edit" style="text-decoration:none">' + IC.edit + ' Sửa</a>' +
       (setInfo.key && setInfo.key !== '__none__' ? '<a class="btn secondary" href="#/sets/' + encodeURIComponent(setInfo.key) + '" style="text-decoration:none">' + IC.layers + ' Xem trong Bộ sưu tập</a>' : '') +
       '</div>';
@@ -624,6 +627,18 @@
       html += '</tbody></table>';
     }
     html += '</section></div>';
+
+    var myListings = BCT.listingsOfCard(S, id);
+    html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Tin rao bán (' + myListings.length + ')</h2><a class="btn secondary btn-sm" href="#/rao?card=' + c.id + '" style="text-decoration:none">Quản lý rao bán →</a></div>';
+    if (!myListings.length) html += '<p class="panel-note">Chưa có tin rao nào cho lá này.</p>';
+    else {
+      html += '<table class="tbl"><thead><tr><th class="r">Giá rao</th><th class="r">SL</th><th>Kênh</th><th>Trạng thái</th></tr></thead><tbody>';
+      myListings.forEach(function (l) {
+        html += '<tr><td class="r">' + BCT.fmtVND(l.price) + '</td><td class="r">' + l.qty + '</td><td>' + (l.channel ? BCT.CHANNELS[l.channel] || l.channel : '—') + '</td><td><span class="tag">' + (BCT.LISTING_STATUS_LABELS[l.status] || l.status) + '</span></td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</section>';
 
     html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Đơn đã bán (' + orders.length + ')</h2></div>';
     if (!orders.length) html += '<p class="panel-note">Chưa có đơn nào chứa card này.</p>';
@@ -1141,7 +1156,7 @@
       '<div class="field"><label>Pop (số lá cùng điểm)</label><input id="n-pop" inputmode="numeric" placeholder="VD: 42"></div>' +
       '<div class="field"><label>Graded</label><div style="display:flex;gap:8px"><select id="n-graded-org" style="flex:1"><option value="">Không graded</option><option>PSA</option><option>BGS</option></select><input id="n-graded-score" placeholder="Điểm" style="width:80px" inputmode="decimal"></div></div>' +
       '<div class="field full"><label>Ghi chú</label><textarea id="n-note" placeholder="Tình trạng, đặc điểm…"></textarea></div>' +
-      '<div class="field full"><label>Ảnh card</label><div class="img-drop" id="img-drop">Bấm để chọn ảnh (tự nén còn ~800px, JPEG) <input type="file" id="n-images" accept="image/*" multiple></div><div class="img-preview" id="img-preview"></div><div class="hint">Chụp mặt trước & mặt sau lá bài của Bự. Ảnh tải lên Supabase Storage. Bỏ trống = dùng ảnh chính thức từ TCGdex.</div></div>' +
+      '<div class="field full"><label>Ảnh card</label><div class="img-drop" id="img-drop">Bấm để chọn ảnh (tự nén còn ~800px, JPEG) <input type="file" id="n-images" accept="image/*" multiple></div><div class="img-preview" id="img-preview"></div><div class="hint">Chụp mặt trước & mặt sau lá bài của bạn. Ảnh tải lên Supabase Storage. Bỏ trống = dùng ảnh chính thức từ TCGdex.</div></div>' +
       '</div>';
     html += '<div class="field"><label>Số lượng *</label><input id="n-qty" inputmode="numeric" placeholder="VD: 5"></div>';
     html += '<div class="field"><label>Giá cost / thẻ (VND) *</label><input id="n-cost" inputmode="numeric" placeholder="VD: 10.000"><div class="hint">Giá vốn của đúng lô này.</div></div>';
@@ -1223,6 +1238,49 @@
   }
 
   /* ================= VIEW: ĐƠN HÀNG ================= */
+  /* ================= VIEW: RAO BÁN (listings — Phase 2, quản lý nội bộ) ================= */
+  var listingFilter = { status: '' };
+  function vListings(q) {
+    q = q || {};
+    var prefillCardId = q.card || '';
+    var listings = (S.listings || []).slice().sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? 1 : -1; });
+    var shown = listingFilter.status ? listings.filter(function (l) { return l.status === listingFilter.status; }) : listings;
+    var html = '<h1 class="page-title">Rao bán</h1><p class="page-sub">' + listings.length + ' tin rao · Chuẩn bị giá và số lượng trước, khi nào bán thật thì chuyển trạng thái sang "Đang rao". Đây là quản lý nội bộ — chưa phải trang bán hàng công khai.</p>';
+
+    html += '<form id="f-rao"><section class="panel"><h3 style="margin-top:0">Tạo tin rao mới</h3><div class="form-grid">';
+    html += '<div class="field full"><label>Card *</label><select id="r-card">' +
+      S.cards.map(function (c) { return '<option value="' + c.id + '"' + (prefillCardId === c.id ? ' selected' : '') + '>' + BCT.esc(c.name) + ' — ' + BCT.esc(c.set || '') + ' (tồn ' + BCT.stockOf(S, c.id) + ')</option>'; }).join('') +
+      '</select></div>';
+    html += '<div class="field"><label>Giá rao / lá (VND) *</label><input id="r-price" inputmode="numeric" placeholder="VD: 250.000"></div>';
+    html += '<div class="field"><label>Số lượng rao *</label><input id="r-qty" inputmode="numeric" value="1"></div>';
+    html += '<div class="field"><label>Kênh rao</label><select id="r-channel"><option value="">— Chưa chọn —</option>' +
+      Object.keys(BCT.CHANNELS).map(function (k) { return '<option value="' + k + '">' + BCT.CHANNELS[k] + '</option>'; }).join('') + '</select></div>';
+    html += '<div class="field"><label>Trạng thái</label><select id="r-status">' +
+      BCT.LISTING_STATUSES.map(function (s) { return '<option value="' + s + '"' + (s === 'draft' ? ' selected' : '') + '>' + BCT.LISTING_STATUS_LABELS[s] + '</option>'; }).join('') + '</select><div class="hint">Mặc định Nháp — chưa bán thì cứ để Nháp.</div></div>';
+    html += '</div><div class="form-actions"><button class="btn" type="submit">' + IC.check + ' Tạo tin rao</button></div></section></form>';
+
+    html += '<div class="toolbar"><select id="l-status-filter"><option value="">Mọi trạng thái</option>' +
+      BCT.LISTING_STATUSES.map(function (s) { return '<option value="' + s + '"' + (listingFilter.status === s ? ' selected' : '') + '>' + BCT.LISTING_STATUS_LABELS[s] + '</option>'; }).join('') + '</select></div>';
+    if (!shown.length) {
+      html += '<section class="panel"><div class="empty"><h3>Chưa có tin rao nào</h3><p>Tạo tin rao đầu tiên ở form phía trên. Tin ở trạng thái Nháp chỉ nằm trong app quản lý này.</p></div></section>';
+    } else {
+      html += '<section class="panel" style="padding:6px 22px"><table class="tbl"><thead><tr><th>Card</th><th class="r">Giá rao</th><th class="r">SL rao</th><th class="r">Tồn kho</th><th>Kênh</th><th>Trạng thái</th><th></th></tr></thead><tbody>';
+      html += shown.map(function (l) {
+        var c = BCT.getCard(S, l.cardId);
+        var stock = c ? BCT.stockOf(S, c.id) : 0;
+        return '<tr><td>' + (c ? '<a class="rowlink" href="#/kho/' + c.id + '">' + BCT.esc(c.name) + '</a><div style="color:var(--muted);font-size:12px">' + BCT.esc(c.set || '') + (c.number ? ' · #' + BCT.esc(c.number) : '') + '</div>' : '(card đã bị xóa)') + '</td>' +
+          '<td class="r">' + BCT.fmtVND(l.price) + '</td>' +
+          '<td class="r">' + l.qty + (l.qty > stock ? ' <span class="secret-tag">VƯỢT TỒN</span>' : '') + '</td>' +
+          '<td class="r">' + stock + '</td>' +
+          '<td>' + (l.channel ? BCT.CHANNELS[l.channel] || l.channel : '—') + '</td>' +
+          '<td><select data-listing-status="' + l.id + '">' + BCT.LISTING_STATUSES.map(function (s) { return '<option value="' + s + '"' + (l.status === s ? ' selected' : '') + '>' + BCT.LISTING_STATUS_LABELS[s] + '</option>'; }).join('') + '</select></td>' +
+          '<td class="r"><button type="button" class="btn-ghost" data-listing-del="' + l.id + '">Xóa</button></td></tr>';
+      }).join('');
+      html += '</tbody></table></section>';
+    }
+    return html;
+  }
+
   var ordFilter = { channel: '', month: '' };
 
   function vDonHang() {
@@ -1464,9 +1522,20 @@
             var gOrg = $('n-graded-org').value, gScore = $('n-graded-score').value.trim();
             var setName = $('n-set').value.trim();
             var setHit = lookupSetByName(setName);
+            var newNum = $('n-number').value.trim();
+            // Chặn tách kho do tạo trùng: cùng tên + cùng số + cùng set thì gần như chắc chắn là 1 card.
+            var dup = S.cards.filter(function (x) {
+              return x.name.toLowerCase() === name.toLowerCase()
+                && String(x.number || '') === newNum
+                && ((setHit && x.setId === setHit.id) || (x.set || '').toLowerCase() === setName.toLowerCase());
+            })[0];
+            if (dup && !confirm('Đã có "' + dup.name + '" (' + (dup.set || 'chưa rõ set') + (dup.number ? ' · #' + dup.number : '') + ') trong kho, đang tồn ' + BCT.stockOf(S, dup.id) + ' lá.\n\nOK = vẫn tạo card mới riêng (chỉ khi đây thật sự là lá khác)\nCancel = hủy, quay lại chọn card có sẵn ở ô Card phía trên')) {
+              toast('Đã hủy tạo card trùng — hãy chọn card có sẵn ở ô Card phía trên.');
+              return;
+            }
             var card = await BCT.addCard(S, {
               name: name, set: setName, setId: setHit ? setHit.id : null,
-              number: $('n-number').value.trim(),
+              number: newNum,
               rarity: $('n-rarity').value, condition: $('n-cond').value,
               graded: gOrg ? { org: gOrg, score: gScore || '' } : null,
               language: $('n-lang').value || 'en',
@@ -1480,11 +1549,14 @@
           } else {
             cardId = cardSel.value;
           }
+          // Condition của lô = condition CỦA CARD. Trước đây luôn đọc ô n-cond của form
+          // tạo card mới (kể cả khi nhập thêm lô cho card có sẵn) → lô bị ghi sai condition mặc định.
+          var lotCard = BCT.getCard(S, cardId);
           await BCT.addLot(S, {
             cardId: cardId, qty: qty, costPerUnit: cost, importDate: date, source: source,
             variant: $('n-variant').value || 'Normal',
             holoPattern: $('n-holo').value || null,
-            condition: $('n-cond') ? $('n-cond').value : 'A'
+            condition: lotCard ? BCT.condLabel(lotCard.condition) : 'A'
           });
           if (pendingImages.length) {
             await BCT.uploadImageToCard(S, cardId, pendingImages);
@@ -1527,6 +1599,48 @@
     if (base === 'donhang' && !r.segs[1]) {
       $('o-channel').addEventListener('change', function (e) { ordFilter.channel = e.target.value; $('ord-body').innerHTML = ordRows(); });
       $('o-month').addEventListener('change', function (e) { ordFilter.month = e.target.value; $('ord-body').innerHTML = ordRows(); });
+    }
+
+    if (base === 'rao') {
+      var fRao = $('f-rao');
+      if (fRao) fRao.addEventListener('submit', function (e) {
+        e.preventDefault();
+        withLoading(async function () {
+          var listing = await BCT.createListing(S, {
+            cardId: $('r-card').value,
+            price: parseVND($('r-price').value),
+            qty: $('r-qty').value,
+            channel: $('r-channel').value || '',
+            status: $('r-status').value || 'draft'
+          });
+          var rc = BCT.getCard(S, listing.cardId);
+          toast('Đã tạo tin rao' + (rc ? ' cho ' + rc.name : '') + ' (' + BCT.LISTING_STATUS_LABELS[listing.status] + ').');
+          render();
+        }).catch(function (err) { toast(err.message); });
+      });
+      var lf = $('l-status-filter');
+      if (lf) lf.addEventListener('change', function (e) { listingFilter.status = e.target.value; render(); });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-listing-status]'), function (el) {
+        el.addEventListener('change', function () {
+          var id = el.getAttribute('data-listing-status');
+          withLoading(async function () {
+            await BCT.updateListing(S, id, { status: el.value });
+            toast('Đã đổi trạng thái tin rao sang ' + BCT.LISTING_STATUS_LABELS[el.value] + '.');
+            render();
+          }).catch(function (err) { toast(err.message); render(); });
+        });
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-listing-del]'), function (el) {
+        el.addEventListener('click', function () {
+          if (!confirm('Xóa tin rao này? Card và tồn kho không bị ảnh hưởng.')) return;
+          var id = el.getAttribute('data-listing-del');
+          withLoading(async function () {
+            await BCT.deleteListing(S, id);
+            toast('Đã xóa tin rao.');
+            render();
+          }).catch(function (err) { toast(err.message); });
+        });
+      });
     }
   }
 

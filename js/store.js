@@ -195,6 +195,15 @@
     return { id: r.id, name: r.name, total: r.total, official: r.official, year: r.year, note: r.note || '', createdAt: r.created_at || null };
   }
 
+  function mapListing(r) {
+    return {
+      id: r.id, cardId: r.card_id, lotId: r.lot_id || null,
+      price: Number(r.price) || 0, qty: Number(r.qty) || 1,
+      status: r.status || 'draft', channel: r.channel || '',
+      createdAt: r.created_at || null
+    };
+  }
+
   // Cột có thể chưa tồn tại trong DB (chỉ có anon key, không tự ALTER).
   // Thử insert kèm cột → lỗi thì insert lại không có cột đó + cảnh báo (cache kết quả).
   var _missingCols = {};
@@ -262,8 +271,26 @@
   }
 
   // ---------- load ----------
+  // Cờ "đã qua lần nạp mẫu đầu tiên / đã xóa mẫu" — lưu local.
+  // Không có cờ này, load() sẽ nạp lại dữ liệu mẫu MỖI lần kho trống,
+  // kể cả khi user đã chủ động xóa mẫu để bắt đầu kho thật.
+  var SEED_DONE_KEY = 'bct_seed_done_v1';
+  var _seedDoneMem = false;
+  function seedDone() {
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage) return localStorage.getItem(SEED_DONE_KEY) === '1';
+    } catch (e) { /* private mode / node */ }
+    return _seedDoneMem;
+  }
+  function markSeedDone() {
+    _seedDoneMem = true;
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage) localStorage.setItem(SEED_DONE_KEY, '1');
+    } catch (e) {}
+  }
+
   function blankState() {
-    return { cards: [], lots: [], orders: [], setTotals: {}, customSets: [] };
+    return { cards: [], lots: [], orders: [], setTotals: {}, customSets: [], listings: [] };
   }
 
   async function load() {
@@ -273,6 +300,10 @@
     var images = await SB.q('card_images', { order: 'sort_order.asc' });
     var csets = await SB.q('custom_sets', { order: 'created_at.asc' });
     var totals = await SB.q('set_totals', {});
+    // Bảng listings thuộc Phase 2 — DB cũ có thể chưa tạo bảng này.
+    // Lỗi ở đây KHÔNG được làm sập toàn bộ app: thiếu bảng thì coi như chưa có rao bán.
+    var listings = [];
+    try { listings = await SB.q('listings', { order: 'created_at.asc' }); } catch (e) { listings = []; }
 
     var imgByCard = {};
     images.forEach(function (r) {
@@ -284,11 +315,15 @@
     state.lots = lots.map(mapLot);
     state.orders = orders.map(mapOrder);
     state.customSets = csets.map(mapCustomSet);
+    state.listings = listings.map(mapListing);
     totals.forEach(function (r) { state.setTotals[r.set_key] = r.total; });
 
-    if (!state.cards.length && root.BCT_SEED && root.BCT_SEED.buildSeed) {
+    // Chỉ tự nạp dữ liệu mẫu ở lần mở ĐẦU TIÊN (chưa từng seed / chưa từng xóa mẫu).
+    // Kho trống do user chủ động xóa mẫu thì giữ nguyên trống.
+    if (!state.cards.length && !seedDone() && root.BCT_SEED && root.BCT_SEED.buildSeed) {
       state = await root.BCT_SEED.buildSeed(state);
       state._justSeeded = true; // UI dùng để hiện nút "Xóa dữ liệu mẫu"
+      markSeedDone();
     }
     return state;
   }
@@ -1095,6 +1130,69 @@
 
   // ---------- wipe / reseed / export ----------
   // Xóa toàn bộ dữ liệu (thứ tự an toàn FK). Trả về state trống.
+  // ---------- rao bán (listings, Phase 2 — quản lý trong app, chưa phải storefront) ----------
+  var LISTING_STATUSES = ['draft', 'active', 'sold', 'hidden'];
+  var LISTING_STATUS_LABELS = { draft: 'Nháp', active: 'Đang rao', sold: 'Đã bán', hidden: 'Đã ẩn' };
+
+  function listingsOfCard(state, cardId) {
+    return (state.listings || []).filter(function (l) { return l.cardId === cardId; });
+  }
+
+  function getListing(state, id) {
+    return (state.listings || []).filter(function (l) { return l.id === id; })[0] || null;
+  }
+
+  async function createListing(state, def) {
+    if (!def.cardId || !getCard(state, def.cardId)) throw new Error('Chọn card để rao bán.');
+    var price = Math.round(Number(def.price) || 0);
+    var qty = Math.floor(Number(def.qty) || 0);
+    if (price < 0) throw new Error('Giá rao không hợp lệ.');
+    if (qty <= 0) throw new Error('Số lượng rao phải lớn hơn 0.');
+    var stock = stockOf(state, def.cardId);
+    if (qty > stock) throw new Error('Số lượng rao (' + qty + ') vượt tồn kho hiện có (' + stock + ').');
+    var status = LISTING_STATUSES.indexOf(def.status) >= 0 ? def.status : 'draft';
+    var r = (await SB.ins('listings', [{
+      card_id: def.cardId, lot_id: def.lotId || null,
+      price: price, qty: qty, status: status,
+      channel: def.channel || null
+    }]))[0];
+    var listing = mapListing(r);
+    state.listings = state.listings || [];
+    state.listings.push(listing);
+    return listing;
+  }
+
+  async function updateListing(state, id, patch) {
+    var row = {};
+    if (patch.price !== undefined) {
+      var price = Math.round(Number(patch.price) || 0);
+      if (price < 0) throw new Error('Giá rao không hợp lệ.');
+      row.price = price;
+    }
+    if (patch.qty !== undefined) {
+      var qty = Math.floor(Number(patch.qty) || 0);
+      if (qty <= 0) throw new Error('Số lượng rao phải lớn hơn 0.');
+      row.qty = qty;
+    }
+    if (patch.status !== undefined) {
+      if (LISTING_STATUSES.indexOf(patch.status) < 0) throw new Error('Trạng thái rao không hợp lệ.');
+      row.status = patch.status;
+    }
+    if (patch.channel !== undefined) row.channel = patch.channel || null;
+    if (patch.lotId !== undefined) row.lot_id = patch.lotId || null;
+    if (!Object.keys(row).length) return getListing(state, id);
+    await SB.upd('listings', row, { id: id });
+    var l = getListing(state, id);
+    if (l) Object.keys(patch).forEach(function (k) { l[k] = patch[k]; });
+    return l;
+  }
+
+  async function deleteListing(state, id) {
+    await SB.del('listings', { id: id });
+    state.listings = (state.listings || []).filter(function (l) { return l.id !== id; });
+    return true;
+  }
+
   async function wipeAll() {
     await SB.delAll('card_images', 'id');
     await SB.delAll('inventory_lots', 'id');
@@ -1103,6 +1201,7 @@
     await SB.delAll('cards', 'id');
     await SB.delAll('custom_sets', 'id');
     await SB.delAll('set_totals', 'set_key');
+    markSeedDone(); // xóa sạch là chủ động bắt đầu kho trống — không tự nạp lại mẫu khi tải lại trang
     return blankState();
   }
 
@@ -1112,6 +1211,7 @@
     if (root.BCT_SEED && root.BCT_SEED.buildSeed) {
       state = await root.BCT_SEED.buildSeed(state);
     }
+    markSeedDone();
     return state;
   }
 
@@ -1163,6 +1263,9 @@
     getCustomSet: getCustomSet, customSetByName: customSetByName,
     createCustomSet: createCustomSet, updateCustomSet: updateCustomSet,
     deleteCustomSet: deleteCustomSet, cardsOfCustomSet: cardsOfCustomSet,
+    LISTING_STATUSES: LISTING_STATUSES, LISTING_STATUS_LABELS: LISTING_STATUS_LABELS,
+    listingsOfCard: listingsOfCard, getListing: getListing,
+    createListing: createListing, updateListing: updateListing, deleteListing: deleteListing,
     wipeAll: wipeAll, reseed: reseed, exportJSON: exportJSON
   };
 
