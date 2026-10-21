@@ -1115,12 +1115,72 @@
           if (i < 2) await new Promise(function (r) { setTimeout(r, 800 * (i + 1)); });
         }
       }
-      if (best && best.length) { saveDiag(); return best; }
+      if (best && best.length) break;
+    }
+    var result = best || [];
+    if (result.length < 2) {
+      result = await fillMissingSources(result, setId, number);
+      diagTries.push('lấp chỗ trống pokemontcg.io → tổng ' + result.length + ' nguồn');
     }
     saveDiag();
-    if (best) return best;
+    if (result.length) return result;
     if (lastErr) throw lastErr;
+    return result;
+  }
+
+  // Nguồn lấp chỗ trống: pokemontcg.io (API độc lập với TCGdex, có cả giá
+  // Cardmarket lẫn TCGplayer). Đã gặp trường hợp phía trình duyệt của Zac
+  // TCGdex chỉ trả Cardmarket mà thiếu TCGplayer → nguồn nào thiếu thì lấy
+  // từ đây. Không cần API key ở mức dùng của shop.
+  async function fetchPokemonTcgIoPricing(setId, number) {
+    var raw = String(number).trim();
+    var candidates = [];
+    var n = parseCardNumber(raw);
+    if (/^\d+$/.test(raw) && n != null && String(n) !== raw) candidates.push(String(n));
+    candidates.push(raw);
+    for (var c = 0; c < candidates.length; c++) {
+      var url = 'https://api.pokemontcg.io/v2/cards/' +
+        encodeURIComponent(String(setId).trim()) + '-' +
+        encodeURIComponent(candidates[c]);
+      try {
+        var res = await fetchWithTimeout(url, { cache: 'no-store' }, 15000);
+        if (res.status === 404) continue;
+        if (!res.ok) return [];
+        var j = await res.json();
+        var d = j && j.data;
+        if (!d) return [];
+        var out = [];
+        var cm = d.cardmarket && d.cardmarket.prices;
+        if (cm) {
+          var cmp = cm.trendPrice != null ? cm.trendPrice : cm.averageSellPrice;
+          if (cmp != null) out.push({ source: 'cardmarket', price: cmp, currency: 'EUR', kind: cm.trendPrice != null ? 'trend' : 'avg', updated_at: isoDateStr(d.cardmarket.updatedAt) });
+        }
+        var tp = d.tcgplayer && d.tcgplayer.prices;
+        if (tp) {
+          var tpp = (tp.holofoil && tp.holofoil.market != null) ? tp.holofoil.market
+            : (tp.normal && tp.normal.market != null) ? tp.normal.market
+            : (tp.reverseHolofoil ? tp.reverseHolofoil.market : null);
+          if (tpp != null) out.push({ source: 'tcgplayer', price: tpp, currency: 'USD', kind: 'market', updated_at: isoDateStr(d.tcgplayer.updatedAt) });
+        }
+        return out;
+      } catch (e) { return []; }
+    }
     return [];
+  }
+
+  function isoDateStr(s) { return s ? String(s).replace(/\//g, '-') : null; }
+
+  async function fillMissingSources(entries, setId, number) {
+    var have = {};
+    entries.forEach(function (e) { have[e.source] = true; });
+    if (have.cardmarket && have.tcgplayer) return entries;
+    try {
+      var fb = await fetchPokemonTcgIoPricing(setId, number);
+      fb.forEach(function (e) {
+        if (!have[e.source]) { entries.push(e); have[e.source] = true; }
+      });
+    } catch (e) { /* giữ nguyên kết quả TCGdex */ }
+    return entries;
   }
 
   // eBay: SLOT chờ duyệt App ID (dev kavie2004). Hiện tại trả [] êm thấm.
@@ -1531,6 +1591,7 @@
     cardImageURL: cardImageURL, cardImageFallbackURL: cardImageFallbackURL,
     placeholderImage: placeholderImage,
     fetchMarketPrices: fetchMarketPrices, parsePricingSources: parsePricingSources,
+    fetchPokemonTcgIoPricing: fetchPokemonTcgIoPricing,
     getLastPriceDiag: function () { return lastPriceDiag; },
     priceSourceDefs: priceSourceDefs,
     fmtPrice: fmtPrice, toVND: toVND, condFactor: condFactor,

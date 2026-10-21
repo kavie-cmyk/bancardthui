@@ -1585,6 +1585,12 @@
         var cid = r.segs[1];
         var msgEl = $('mkt-msg');
         function mktMsg(t) { if (msgEl) msgEl.textContent = t; }
+        // Hậu tố chẩn đoán cho lần kéo giá vừa xong (để Zac chụp gửi Miso khi vẫn thiếu nguồn).
+        function priceDiagSuffix() {
+          var dg = (BCT.getLastPriceDiag ? BCT.getLastPriceDiag() : null);
+          if (!dg || !dg.tries || !dg.tries.length) return '';
+          return ' Chẩn đoán: ' + dg.card + ' — ' + dg.tries.join(' | ');
+        }
         $('mkt-fetch').addEventListener('click', function () {
           var c = BCT.getCard(S, cid);
           if (!c) return;
@@ -1593,10 +1599,15 @@
           withLoading(async function () {
             try {
               var srcs = await BCT.fetchMarketPrices(c.setId, c.number);
-              if (!srcs) { mktMsg('Chưa có giá cho lá này trên TCGdex. Bạn vẫn có thể nhập tay bên dưới.'); return; }
+              if (!srcs) { mktMsg('Chưa có giá cho lá này trên TCGdex. Bạn vẫn có thể nhập tay bên dưới.' + priceDiagSuffix()); return; }
               await BCT.saveMarketPrices(S, cid, srcs);
               toast('Đã cập nhật giá ' + srcs.length + ' nguồn: ' + srcs.map(function (s) { return BCT.sourceLabel(s.source); }).join(' + '));
               render();
+              // render() vẽ lại #mkt-msg nên phải hiện dòng chẩn đoán SAU render.
+              if (srcs.length < 2) {
+                var mel = $('mkt-msg');
+                if (mel) mel.textContent = 'Vẫn thiếu nguồn giá — chụp màn hình dòng này gửi Miso nhé.' + priceDiagSuffix();
+              }
             } catch (err) {
               mktMsg('Lỗi kéo giá: ' + (err.message || err));
             }
