@@ -62,7 +62,6 @@ html.theme-rs .nav a.active::before { content: ''; width: 0; height: 0; border-t
 html.theme-rs .topbar [hidden] { display: none; }
 html.theme-rs .topbar .btn-ghost { color: #294867; border: 1px solid #9ca6a6; border-radius: 0; padding: 4px 9px; font: 19px var(--font-display); }
 html.theme-rs .topbar .btn-ghost:hover { background: #e4eadf; }
-html.theme-rs .seed-pill { font: 16px var(--font-display); background: #f4e8ad; color: #705528; border: 1px solid #ad9250; border-radius: 0; letter-spacing: 0; }
 html.theme-rs .ball-toggle { margin-left: 4px; width: 32px; height: 32px; }
 
 /* Game windows: stepped colour borders and opaque paper. */
@@ -266,7 +265,6 @@ html.theme-rs .rs-game-footer { display: flex; align-items: center; gap: 14px; p
   html.theme-rs .brand-mark { width: 32px; height: 32px; background-size: 32px; }
   html.theme-rs .ball-toggle { margin: 0; }
   html.theme-rs .topbar .btn-ghost { font-size: 17px; padding: 3px 6px; }
-  html.theme-rs .topbar #btn-seed-toggle { margin-left: auto; }
   html.theme-rs .nav { margin: 5px -8px -8px; width: calc(100% + 16px); }
   html.theme-rs .nav a { font-size: 21px; padding: 7px 10px; min-height: 44px; }
   html.theme-rs .rs-nav-icon { width: 24px; height: 24px; }

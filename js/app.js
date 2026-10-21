@@ -274,7 +274,6 @@
     var series = BCT.weeklySeries(S, 8);
     var top = BCT.topSellers(S, 5);
     var slow = BCT.slowMovers(S, 5);
-    var low = BCT.lowStock(S, 2);
     var profitCls = t.profit >= 0 ? 'green' : 'red';
     var topCard = top.length ? top[0].card : null;
 
@@ -307,7 +306,7 @@
 
     html += '<div class="grid-2">';
     html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Top card bán chạy</h2></div>' + topList(top) + '</section>';
-    html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Tồn lâu & sắp hết</h2></div>' + slowAndLow(slow, low) + '</section>';
+    html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Tồn lâu nhất</h2></div>' + slowList(slow) + '</section>';
     html += '</div>';
 
     html += '<section class="panel"><div class="panel-head"><h2 class="panel-title">Hoạt động gần đây</h2></div>' + recentActivity() + '</section>';
@@ -366,21 +365,15 @@
     }).join('');
   }
 
-  function slowAndLow(slow, low) {
-    var html = '';
-    low.forEach(function (x) {
-      html += '<div class="alert">' + IC.warn + '<div><b>' + BCT.esc(x.card.name) + '</b> chỉ còn <b class="mono">' + x.stock + ' thẻ</b> — cân nhắc nhập thêm hoặc giữ giá.</div></div>';
-    });
-    if (!slow.length && !low.length) return '<div class="empty" style="padding:24px">Kho đang trống.</div>';
-    if (slow.length) {
-      html += '<div class="panel-note" style="margin:10px 0 4px">Tồn lâu nhất (ngày từ lô cũ nhất):</div>';
-      html += slow.map(function (x) {
-        return '<div class="rowline"><div class="grow"><div class="t">' + BCT.esc(x.card.name) + '</div>' +
-          '<div class="s">nhập từ ' + BCT.fmtDate(x.oldestDate) + ' · còn ' + x.stock + ' thẻ</div></div>' +
-          '<div class="mono" style="color:var(--gold-soft)">' + x.days + ' ngày</div></div>';
-      }).join('');
-    }
-    return html;
+  // Chỉ còn danh sách tồn kho lâu nhất (Zac bỏ hẳn phần cảnh báo sắp hết
+  // "chỉ còn X thẻ — cân nhắc nhập thêm hoặc giữ giá" ngày 2026-10-21).
+  function slowList(slow) {
+    if (!slow.length) return '<div class="empty" style="padding:24px">Kho đang trống.</div>';
+    return slow.map(function (x) {
+      return '<div class="rowline"><div class="grow"><div class="t">' + BCT.esc(x.card.name) + '</div>' +
+        '<div class="s">nhập từ ' + BCT.fmtDate(x.oldestDate) + ' · còn ' + x.stock + ' thẻ</div></div>' +
+        '<div class="mono" style="color:var(--gold-soft)">' + x.days + ' ngày</div></div>';
+    }).join('');
   }
 
   function recentActivity() {
