@@ -291,8 +291,14 @@
     html += '<h1 class="hero-title">Lãi/lỗ thực tế <span class="num ' + (t.profit >= 0 ? 'pos' : 'neg') + '">' + (t.profit >= 0 ? '+' : '−') + BCT.fmtVND(Math.abs(t.profit)) + '</span></h1>';
     html += '<p class="hero-sub">Tính theo giá vốn FIFO từng lô nhập — cùng 1 card nhập 2 đợt giá khác nhau vẫn ra lãi chuẩn từng đơn.</p>';
     html += '</div>';
-    html += '<div class="foil-card"><div class="fc-inner">' + IC.card.replace('<svg', '<svg width="40" height="40"') +
-      '<div class="fc-name">' + BCT.esc(topCard ? topCard.name : 'Vault') + '</div><div class="fc-tag">BEST SELLER</div></div></div>';
+    var heroImg = topCard ? cardImgTag(topCard, 'high', 'fc-img', topCard.name) : '';
+    if (heroImg) {
+      html += '<div class="foil-card has-img"><div class="fc-inner">' + heroImg +
+        '<div class="fc-caption"><div class="fc-name">' + BCT.esc(topCard.name) + '</div><div class="fc-tag">BEST SELLER</div></div></div></div>';
+    } else {
+      html += '<div class="foil-card"><div class="fc-inner">' + IC.card.replace('<svg', '<svg width="40" height="40"') +
+        '<div class="fc-name">' + BCT.esc(topCard ? topCard.name : 'Vault') + '</div><div class="fc-tag">BEST SELLER</div></div></div>';
+    }
     html += '</section>';
 
     html += '<section class="kpis">';

@@ -129,6 +129,11 @@ body {
 }
 .foil-card .fc-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; text-align: center; line-height: 1.2; padding: 0 8px; }
 .foil-card .fc-tag { font-size: 10px; letter-spacing: 3px; color: var(--muted); }
+.foil-card.has-img .fc-inner { position: relative; overflow: hidden; display: block; }
+.foil-card .fc-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 8px; }
+.foil-card .fc-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 6px 7px; display: flex; flex-direction: column; align-items: center; gap: 2px; background: linear-gradient(transparent, rgba(10, 8, 4, 0.88) 45%); border-radius: 0 0 8px 8px; }
+.foil-card .fc-caption .fc-name { font-size: 12.5px; color: var(--ink); text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+.foil-card .fc-caption .fc-tag { color: rgba(242, 237, 226, 0.75); }
 
 /* ---------- KPI cards ---------- */
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px; }
