@@ -1140,6 +1140,18 @@
       px.entries.forEach(function (e) { if (!have2[e.source]) { result.push(e); have2[e.source] = true; } });
       diagTries.push('qua Supabase (price-proxy): ' + px.note + ' → tổng ' + result.length + ' nguồn');
     }
+    // TCGdex chập chờn theo đợt cập nhật: có khoảnh khắc tcgplayer = NULL ở
+    // mọi đường rồi ngay sau đó lại đủ (đã gặp 21/10 với sv08-226). Vẫn
+    // thiếu nguồn thì gọi lại price-proxy tối đa 2 vòng nữa — mỗi lần gọi
+    // là máy chủ Supabase đi lấy dữ liệu mới — trước khi chịu thua.
+    for (var rp = 0; rp < 2 && result.length < 2; rp++) {
+      await new Promise(function (r) { setTimeout(r, 1500 * (rp + 1)); });
+      var px2 = await fetchPriceProxy(setId, number);
+      var have3 = {};
+      result.forEach(function (e) { have3[e.source] = true; });
+      px2.entries.forEach(function (e) { if (!have3[e.source]) { result.push(e); have3[e.source] = true; } });
+      diagTries.push('thử lại price-proxy vòng ' + (rp + 2) + ': ' + px2.note + ' → tổng ' + result.length + ' nguồn');
+    }
     saveDiag();
     if (result.length) return result;
     if (lastErr) throw lastErr;

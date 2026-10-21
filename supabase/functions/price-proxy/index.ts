@@ -114,26 +114,19 @@ Deno.serve(async (req) => {
     const idPath = (num: string) =>
       `${encodeURIComponent(set)}-${encodeURIComponent(num)}`;
 
+    // LƯU Ý: khoảnh khắc TCGdex trả tcgplayer = NULL được xử lý bằng cách
+    // APP tự gọi lại function này tối đa 2 vòng (xem fetchPrices trong
+    // js/store.js) — bản function đang deploy giữ nguyên vòng đơn.
     let sources: Src[] = [];
     let diag = "";
-    // TCGdex thỉnh thoảng trả pricing.tcgplayer = NULL theo đợt cập nhật
-    // dữ liệu (đã gặp cả từ trình duyệt lẫn từ máy chủ) → thử lại tối đa 4
-    // vòng, mỗi vòng URL kèm mã ngẫu nhiên, tới khi đủ 2 nguồn thì dừng.
     for (const num of candidates) {
-      let got200 = false;
-      for (let attempt = 0; attempt < 4; attempt++) {
-        if (attempt > 0) await new Promise((r) => setTimeout(r, 1200));
-        const r = await fetch(`https://api.tcgdex.net/v2/en/cards/${idPath(num)}?cb=${Date.now()}_${attempt}`);
-        if (r.status === 404) { diag = "tcgdex 404"; break; }
-        if (!r.ok) { diag = `tcgdex HTTP ${r.status}`; continue; }
-        got200 = true;
-        const card = await r.json();
-        const parsed = fromTcgdex(card?.pricing);
-        if (parsed.length > sources.length) sources = parsed;
-        diag = `tcgdex ${sources.length} nguồn (vòng ${attempt + 1})`;
-        if (sources.length >= 2) break;
-      }
-      if (got200 || sources.length) break;
+      const r = await fetch(`https://api.tcgdex.net/v2/en/cards/${idPath(num)}`);
+      if (r.status === 404) { diag = "tcgdex 404"; continue; }
+      if (!r.ok) { diag = `tcgdex HTTP ${r.status}`; break; }
+      const card = await r.json();
+      sources = fromTcgdex(card?.pricing);
+      diag = `tcgdex ${sources.length} nguồn`;
+      break;
     }
     if (sources.length < 2) {
       for (const num of candidates) {
