@@ -198,6 +198,21 @@
     if (d.indexOf('84') === 0 && d.length === 11) d = '0' + d.slice(2);
     return /^0\d{9,10}$/.test(d) ? d : null;
   }
+  function newId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = (Math.random() * 16) | 0;
+      return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
+  }
+  var lastOrder = null; // {id, code, phone} của đơn vừa gửi — cho nút "Xem trạng thái đơn"
+  function rememberOrder(id, phone) {
+    var list = [];
+    try { list = JSON.parse(localStorage.getItem('bct_my_orders') || '[]') || []; } catch (e) { list = []; }
+    list = list.filter(function (o) { return o.id !== id; });
+    list.unshift({ id: id, code: id.slice(0, 8).toUpperCase(), phone: phone, ts: Date.now() });
+    try { localStorage.setItem('bct_my_orders', JSON.stringify(list.slice(0, 10))); } catch (e) {}
+  }
 
   async function submitOrder(ev) {
     ev.preventDefault();
@@ -223,6 +238,7 @@
     });
     var total = items.reduce(function (s, it) { return s + it.price * it.qty; }, 0);
 
+    var orderId = newId();
     var btn = document.getElementById('co-submit');
     btn.disabled = true; btn.textContent = 'Đang gửi đơn…';
     try {
@@ -235,17 +251,22 @@
           'Prefer': 'return=minimal'
         },
         body: JSON.stringify({
+          id: orderId,
           customer_name: name, phone: phone, address: address, note: note,
           items: items, total: total, status: 'new'
         })
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       cart = {}; saveCart();
+      lastOrder = { id: orderId, code: orderId.slice(0, 8).toUpperCase(), phone: phone };
+      rememberOrder(orderId, phone);
+      renderMyOrders();
       renderGrid(); renderCartUI();
       document.getElementById('cart-main').hidden = true;
       var ok = document.getElementById('cart-success');
       ok.hidden = false;
       document.getElementById('success-total').textContent = fmtVND(total);
+      document.getElementById('success-code').textContent = lastOrder.code;
     } catch (e) {
       msg.textContent = 'Gửi đơn chưa được — bạn thử lại sau ít phút, hoặc nhắn Messenger/Zalo cho shop để đặt trực tiếp.';
       msg.classList.add('err');
@@ -320,6 +341,88 @@
     document.getElementById('cart-main').hidden = false;
     closeCart();
   });
+  document.getElementById('success-track').addEventListener('click', function () {
+    document.getElementById('cart-success').hidden = true;
+    document.getElementById('cart-main').hidden = false;
+    closeCart();
+    if (lastOrder) {
+      document.getElementById('track-code').value = lastOrder.code;
+      document.getElementById('track-phone').value = lastOrder.phone;
+      trackOrder();
+      document.querySelector('.track-box').scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+
+  /* ---------------- tra cứu đơn (mã đơn + SĐT) ---------------- */
+  var TRACK_STATUS = {
+    new: '⏳ Chờ shop xác nhận',
+    done: '✅ Đã xác nhận — shop sẽ liên hệ để giao hàng',
+    cancelled: '❌ Đơn đã hủy'
+  };
+  function renderMyOrders() {
+    var list = [];
+    try { list = JSON.parse(localStorage.getItem('bct_my_orders') || '[]') || []; } catch (e) { list = []; }
+    var box = document.getElementById('my-orders');
+    if (!list.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<span class="my-label">Đơn của tôi trên máy này:</span> ' + list.map(function (o) {
+      return '<button type="button" class="chip" data-mycode="' + esc(o.code) + '" data-myphone="' + esc(o.phone) + '">Đơn ' + esc(o.code) + '</button>';
+    }).join(' ');
+  }
+  async function trackOrder() {
+    var box = document.getElementById('track-result');
+    var code = document.getElementById('track-code').value.trim();
+    var phone = validPhone(document.getElementById('track-phone').value);
+    if (!code) { box.innerHTML = '<p class="track-err">Bạn nhập mã đơn giúp shop nhé.</p>'; return; }
+    if (!phone) { box.innerHTML = '<p class="track-err">Số điện thoại chưa đúng — nhập đúng số đã dùng khi đặt hàng.</p>'; return; }
+    box.innerHTML = '<p class="track-hint">Đang tra cứu…</p>';
+    try {
+      var res = await fetch(window.SUPABASE_URL + '/rest/v1/rpc/track_store_order', {
+        method: 'POST',
+        headers: {
+          'apikey': window.SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + window.SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ p_code: code, p_phone: phone })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var data = await res.json();
+      if (!data) {
+        box.innerHTML = '<p class="track-err">Không tìm thấy đơn — kiểm tra lại mã đơn và số điện thoại (phải là số đã dùng khi đặt).</p>';
+        return;
+      }
+      var when = data.created_at ? new Date(data.created_at) : null;
+      var whenTxt = when ? when.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+      var lines = (data.items || []).map(function (it) {
+        return '<div class="cart-line"><div class="cl-info"><div class="cl-name">' + esc(it.name || '') + '</div>' +
+          '<div class="cl-sub">' + fmtVND(it.price) + ' × ' + it.qty + '</div></div>' +
+          '<div class="cl-total">' + fmtVND((Number(it.price) || 0) * (Number(it.qty) || 0)) + '</div></div>';
+      }).join('');
+      box.innerHTML = '<div class="track-card">' +
+        '<div class="track-status">' + (TRACK_STATUS[data.status] || data.status) + '</div>' +
+        '<div class="cl-sub">Đơn ' + esc(String(data.code || '').toUpperCase()) + ' · ' + esc(data.customer_name || '') + (whenTxt ? ' · đặt lúc ' + whenTxt : '') + '</div>' +
+        lines +
+        '<div class="cart-sumrow"><span>Tiền hàng</span><span>' + fmtVND(data.total) + '</span></div>' +
+        (Number(data.shipping_fee) > 0 ? '<div class="cart-sumrow"><span>Phí ship</span><span>' + fmtVND(data.shipping_fee) + '</span></div>' : '') +
+        '<div class="cart-sumrow"><span><b>Tổng cộng</b></span><b>' + fmtVND((Number(data.total) || 0) + (Number(data.shipping_fee) || 0)) + '</b></div>' +
+        '</div>';
+    } catch (e) {
+      box.innerHTML = '<p class="track-err">Tra cứu chưa được — bạn thử lại sau ít phút nhé.</p>';
+    }
+  }
+  document.getElementById('track-btn').addEventListener('click', trackOrder);
+  document.getElementById('my-orders').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-mycode]');
+    if (!btn) return;
+    document.getElementById('track-code').value = btn.getAttribute('data-mycode');
+    document.getElementById('track-phone').value = btn.getAttribute('data-myphone');
+    trackOrder();
+  });
+  (function prefillFromHash() {
+    var m = String(location.hash || '').match(/#don-([0-9a-fA-F-]{8,36})/);
+    if (m) document.getElementById('track-code').value = m[1].slice(0, 8).toUpperCase();
+  })();
+  renderMyOrders();
 
   load();
 })();

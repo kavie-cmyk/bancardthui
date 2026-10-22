@@ -191,6 +191,33 @@ em { font-style: normal; color: var(--gold-soft); }
 #cart-success .success-emoji { font-size: 40px; }
 #cart-success h2 { margin: 8px 0; font-size: 21px; }
 
+/* ---------- tra cứu đơn ---------- */
+.track-box {
+  margin-top: 28px; padding: 18px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--panel);
+}
+.track-box h2 { margin: 0 0 6px; font-size: 19px; }
+.track-hint { color: var(--muted); font-size: 13.5px; line-height: 1.5; margin: 4px 0 10px; }
+.my-orders { margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.my-orders .my-label { color: var(--muted); font-size: 13px; }
+.track-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.track-form input {
+  flex: 1 1 150px; padding: 11px 12px; font-size: 16px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-family: inherit;
+}
+.track-form button {
+  padding: 11px 18px; border: none; border-radius: 10px; cursor: pointer;
+  background: var(--gold); color: #221a05; font-weight: 800; font-size: 15px; font-family: inherit;
+}
+.track-err { color: #e58a7a; font-size: 14px; }
+.track-card { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.track-status { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
+.success-code {
+  font-family: "IBM Plex Mono", monospace; font-size: 30px; font-weight: 600;
+  letter-spacing: 3px; color: var(--gold-soft); margin: 4px 0 10px;
+}
+.co-btn.alt { background: var(--panel2); color: var(--ink); border: 1px solid var(--line); }
+
 /* ---------- footer ---------- */
 .shop-foot { margin-top: 30px; padding: 16px 4px 8px; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.55; }
 .shop-foot .dim { color: var(--muted); font-size: 13px; }

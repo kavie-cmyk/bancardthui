@@ -224,6 +224,7 @@
       address: r.address || '', note: r.note || '',
       items: Array.isArray(r.items) ? r.items : [],
       total: Number(r.total) || 0,
+      shippingFee: Number(r.shipping_fee) || 0,
       status: r.status || 'new',
       convertedOrderId: r.converted_order_id || null,
       createdAt: r.created_at || null
@@ -1597,6 +1598,40 @@
     return (state.storeOrders || []).filter(function (o) { return o.id === id; })[0] || null;
   }
 
+  // Sửa đơn web (chỉ khi còn 'new'): thông tin khách + dòng hàng + phí ship.
+  // total luôn tính lại từ items để khách tra cứu thấy đúng số sau thương lượng.
+  async function updateStoreOrder(state, id, patch) {
+    var o = getStoreOrder(state, id);
+    if (!o) throw new Error('Không tìm thấy đơn web.');
+    if (o.status !== 'new') throw new Error('Đơn đã xử lý — không sửa được nữa.');
+    var items = (patch.items || []).map(function (it) {
+      return {
+        listing_id: it.listing_id || null, card_id: it.card_id,
+        name: it.name || '', price: Math.round(Number(it.price) || 0),
+        qty: Math.floor(Number(it.qty) || 0)
+      };
+    }).filter(function (it) { return it.card_id && it.qty > 0 && it.price >= 0; });
+    if (!items.length) throw new Error('Đơn phải còn ít nhất 1 lá.');
+    var total = items.reduce(function (s, it) { return s + it.price * it.qty; }, 0);
+    var row = {
+      customer_name: String(patch.customerName || '').trim(),
+      phone: String(patch.phone || '').trim(),
+      address: String(patch.address || '').trim(),
+      note: String(patch.note || '').trim(),
+      items: items, total: total,
+      shipping_fee: Math.round(Number(patch.shippingFee) || 0)
+    };
+    if (!row.customer_name) throw new Error('Thiếu tên khách.');
+    if (!row.phone) throw new Error('Thiếu số điện thoại khách.');
+    if (!row.address) throw new Error('Thiếu địa chỉ giao hàng.');
+    var r = (await SB.upd('store_orders', row, { id: id }))[0];
+    if (r) {
+      var m = mapStoreOrder(r);
+      Object.keys(m).forEach(function (k) { o[k] = m[k]; });
+    }
+    return o;
+  }
+
   async function setStoreOrderStatus(state, id, status) {
     if (['new', 'done', 'cancelled'].indexOf(status) < 0) throw new Error('Trạng thái đơn web không hợp lệ.');
     var r = (await SB.upd('store_orders', { status: status }, { id: id }))[0];
@@ -1619,7 +1654,7 @@
       date: todayISO(),
       channel: 'website',
       buyer: (o.customerName + (o.phone ? ' — ' + o.phone : '')).trim(),
-      fees: 0, shippingFee: 0,
+      fees: 0, shippingFee: Math.round(Number(o.shippingFee) || 0),
       note: ('Đơn từ web: ' + o.address + (o.note ? ' · Ghi chú: ' + o.note : '')).trim(),
       lines: lines
     });
@@ -1694,6 +1729,7 @@
     listingsOfCard: listingsOfCard, getListing: getListing,
     createListing: createListing, updateListing: updateListing, deleteListing: deleteListing,
     getStoreOrder: getStoreOrder, setStoreOrderStatus: setStoreOrderStatus, convertStoreOrder: convertStoreOrder,
+    updateStoreOrder: updateStoreOrder,
     getCardSightKey: getCardSightKey, setCardSightKey: setCardSightKey,
     getCardSightKeys: getCardSightKeys, addCardSightKey: addCardSightKey, removeCardSightKey: removeCardSightKey,
     syncCardSightKeys: syncCardSightKeys,

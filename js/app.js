@@ -1585,7 +1585,65 @@
       [['new', 'Mới (' + counts.new + ')'], ['all', 'Tất cả (' + counts.all + ')'], ['done', 'Đã xử lý (' + counts.done + ')'], ['cancelled', 'Đã hủy (' + counts.cancelled + ')']]
         .map(function (p) { return '<option value="' + p[0] + '"' + (webFilter === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('') + '</select></div>';
     if (!shown.length) html += '<section class="panel"><div class="empty" style="padding:28px">Chưa có đơn nào ở mục này.</div></section>';
-    html += shown.map(webOrderHTML).join('');
+    html += shown.map(function (o) { return o.id === webEditId && webDraft ? webOrderEditHTML(o) : webOrderHTML(o); }).join('');
+    return html;
+  }
+
+  /* ----- sửa đơn web: draft giữ ở module scope để re-render không mất ----- */
+  var webEditId = null;
+  var webDraft = null;
+  function startWebEdit(o) {
+    webEditId = o.id;
+    webDraft = {
+      customerName: o.customerName, phone: o.phone, address: o.address, note: o.note,
+      shippingFee: o.shippingFee || 0,
+      items: o.items.map(function (it) {
+        return { listing_id: it.listing_id || null, card_id: it.card_id, name: it.name || '', price: it.price, qty: it.qty };
+      })
+    };
+  }
+  function scrapeWebDraft() {
+    if (!webDraft) return;
+    var g = function (id) { var el = $(id); return el ? el.value : ''; };
+    webDraft.customerName = g('we-name'); webDraft.phone = g('we-phone');
+    webDraft.address = g('we-address'); webDraft.note = g('we-note');
+    webDraft.shippingFee = parseVND(g('we-ship'));
+    Array.prototype.slice.call(document.querySelectorAll('.we-qty')).forEach(function (inp) {
+      var i = Number(inp.getAttribute('data-i'));
+      if (webDraft.items[i]) webDraft.items[i].qty = Math.floor(Number(inp.value) || 0);
+    });
+    Array.prototype.slice.call(document.querySelectorAll('.we-price')).forEach(function (inp) {
+      var i = Number(inp.getAttribute('data-i'));
+      if (webDraft.items[i]) webDraft.items[i].price = parseVND(inp.value);
+    });
+  }
+  function webOrderEditHTML(o) {
+    var d = webDraft;
+    var stockCards = S.cards.filter(function (c) { return BCT.stockOf(S, c.id) > 0; });
+    var html = '<section class="panel" style="margin-bottom:14px"><div class="panel-head"><h2 class="panel-title" style="font-size:16px">Sửa đơn web — ' + BCT.esc(o.customerName) + '</h2>' +
+      '<span class="tag" style="border-color:var(--gold-dim);color:var(--gold-soft)">Đang sửa</span></div>';
+    html += '<div class="form-grid">' +
+      fld('Họ tên khách *', '<input id="we-name" value="' + BCT.esc(d.customerName) + '">') +
+      fld('Số điện thoại *', '<input id="we-phone" value="' + BCT.esc(d.phone) + '">') +
+      fld('Địa chỉ giao *', '<input id="we-address" value="' + BCT.esc(d.address) + '">') +
+      fld('Ghi chú', '<input id="we-note" value="' + BCT.esc(d.note) + '">') +
+      fld('Phí ship (đ)', '<input id="we-ship" inputmode="numeric" value="' + (d.shippingFee ? d.shippingFee : '') + '" placeholder="0">') +
+      '</div>';
+    html += '<div class="panel-note" style="margin:12px 0 6px">Các lá trong đơn (sửa số lượng/giá sau khi trao đổi với khách):</div>';
+    html += d.items.map(function (it, i) {
+      return '<div class="rowline"><div class="grow"><div class="t">' + BCT.esc(it.name) + '</div></div>' +
+        '<label class="s">SL <input class="we-qty" data-i="' + i + '" type="number" min="0" value="' + it.qty + '" style="width:64px"></label>' +
+        '<label class="s">Giá/lá (đ) <input class="we-price" data-i="' + i + '" inputmode="numeric" value="' + it.price + '" style="width:110px"></label>' +
+        '<button type="button" class="btn-ghost" data-weremove="' + i + '">Bỏ lá này</button></div>';
+    }).join('');
+    html += '<div class="rowline"><div class="grow"><select id="we-add-card">' +
+      stockCards.map(function (c) { return '<option value="' + c.id + '">' + BCT.esc(c.name) + ' — ' + BCT.esc(c.set || '') + ' (tồn ' + BCT.stockOf(S, c.id) + ')</option>'; }).join('') +
+      '</select></div>' +
+      '<label class="s">Giá/lá (đ) <input id="we-add-price" inputmode="numeric" placeholder="giá thỏa thuận" style="width:110px"></label>' +
+      '<button type="button" class="btn-ghost" data-weadd="1">+ Thêm lá</button></div>';
+    html += '<div class="form-actions" style="margin-top:12px">' +
+      '<button type="button" class="btn" data-wesave="' + o.id + '">Lưu thay đổi</button>' +
+      '<button type="button" class="btn-ghost" data-wecancel="1">Hủy sửa</button></div></section>';
     return html;
   }
 
@@ -1603,9 +1661,13 @@
         '<div class="s mono">' + BCT.fmtVND(it.price) + ' × ' + it.qty + '</div></div>' +
         '<div class="mono">' + BCT.fmtVND((Number(it.price) || 0) * (Number(it.qty) || 0)) + '</div></div>';
     }).join('');
+    if ((o.shippingFee || 0) > 0) {
+      html += '<div class="s" style="margin-top:8px">Tiền hàng ' + BCT.fmtVND(o.total) + ' · Phí ship ' + BCT.fmtVND(o.shippingFee) + ' · <b style="color:var(--ink)">Tổng cộng ' + BCT.fmtVND(o.total + o.shippingFee) + '</b></div>';
+    }
     if (o.status === 'new') {
       html += '<div class="form-actions" style="margin-top:12px">' +
         '<button type="button" class="btn" data-wconvert="' + o.id + '">Tạo đơn bán &amp; trừ kho</button>' +
+        '<button type="button" class="btn-ghost" data-wedit="' + o.id + '">Sửa đơn</button>' +
         '<button type="button" class="btn-ghost" data-wdone="' + o.id + '">Đã xử lý tay</button>' +
         '<button type="button" class="btn-ghost" data-wcancel="' + o.id + '">Hủy đơn</button></div>';
     } else if (o.status === 'done' && o.convertedOrderId) {
@@ -1616,7 +1678,48 @@
 
   function bindDonWeb() {
     var f = $('w-filter');
-    if (f) f.addEventListener('change', function () { webFilter = f.value; render(); });
+    if (f) f.addEventListener('change', function () { webFilter = f.value; webEditId = null; webDraft = null; render(); });
+    Array.prototype.slice.call(document.querySelectorAll('[data-wedit]')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var o = BCT.getStoreOrder(S, btn.getAttribute('data-wedit'));
+        if (!o) return;
+        startWebEdit(o);
+        render();
+      });
+    });
+    Array.prototype.slice.call(document.querySelectorAll('[data-weremove]')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        scrapeWebDraft();
+        webDraft.items.splice(Number(btn.getAttribute('data-weremove')), 1);
+        render();
+      });
+    });
+    var addBtn = document.querySelector('[data-weadd]');
+    if (addBtn) addBtn.addEventListener('click', function () {
+      scrapeWebDraft();
+      var sel = $('we-add-card');
+      if (!sel || !sel.value) return;
+      var c = BCT.getCard(S, sel.value);
+      if (!c) return;
+      webDraft.items.push({ listing_id: null, card_id: c.id, name: c.name, price: parseVND($('we-add-price').value), qty: 1 });
+      render();
+    });
+    var saveBtn = document.querySelector('[data-wesave]');
+    if (saveBtn) saveBtn.addEventListener('click', function () {
+      var id = saveBtn.getAttribute('data-wesave');
+      scrapeWebDraft();
+      withLoading(async function () {
+        await BCT.updateStoreOrder(S, id, webDraft);
+        webEditId = null; webDraft = null;
+        toast('Đã lưu thay đổi đơn web — khách tra cứu sẽ thấy số mới.');
+        render();
+      }).catch(function (err) { toast(err.message); });
+    });
+    var cancelEditBtn = document.querySelector('[data-wecancel]');
+    if (cancelEditBtn) cancelEditBtn.addEventListener('click', function () {
+      webEditId = null; webDraft = null;
+      render();
+    });
     Array.prototype.slice.call(document.querySelectorAll('[data-wconvert]')).forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = btn.getAttribute('data-wconvert');
