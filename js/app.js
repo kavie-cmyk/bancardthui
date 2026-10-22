@@ -1672,6 +1672,11 @@
         '<button type="button" class="btn-ghost" data-wcancel="' + o.id + '">Hủy đơn</button></div>';
     } else if (o.status === 'done' && o.convertedOrderId) {
       html += '<div class="s" style="margin-top:10px">Đã chuyển thành đơn bán — <a href="#/donhang/' + o.convertedOrderId + '">xem đơn</a>.</div>';
+    } else if (o.status === 'done') {
+      html += '<div class="s" style="margin-top:10px">Đã đánh dấu xử lý tay — đơn vẫn còn đây, không bị xóa.</div>' +
+        '<div class="form-actions" style="margin-top:10px"><button type="button" class="btn-ghost" data-wreopen="' + o.id + '">Đưa về chờ xử lý</button></div>';
+    } else if (o.status === 'cancelled') {
+      html += '<div class="form-actions" style="margin-top:10px"><button type="button" class="btn-ghost" data-wreopen="' + o.id + '">Mở lại đơn này</button></div>';
     }
     return html + '</section>';
   }
@@ -1734,9 +1739,21 @@
     Array.prototype.slice.call(document.querySelectorAll('[data-wdone]')).forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = btn.getAttribute('data-wdone');
+        if (!confirm('Đánh dấu đơn này đã xử lý tay? Đơn sẽ chuyển sang mục "Đã xử lý" (không bị xóa, mở lại được).')) return;
         withLoading(async function () {
           await BCT.setStoreOrderStatus(S, id, 'done');
-          toast('Đã đánh dấu xử lý xong.');
+          toast('Đã đánh dấu xử lý xong — xem ở mục lọc "Đã xử lý".');
+          render();
+        }).catch(function (err) { toast(err.message); });
+      });
+    });
+    Array.prototype.slice.call(document.querySelectorAll('[data-wreopen]')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-wreopen');
+        withLoading(async function () {
+          await BCT.setStoreOrderStatus(S, id, 'new');
+          webFilter = 'new';
+          toast('Đã đưa đơn về "Chờ xử lý".');
           render();
         }).catch(function (err) { toast(err.message); });
       });
