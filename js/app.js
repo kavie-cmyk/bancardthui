@@ -1822,41 +1822,59 @@
   }
 
   function vDonHang() {
-    var cancelledCount = S.orders.filter(function (o) { return o.status === 'cancelled'; }).length;
-    var html = '<h1 class="page-title">Đơn hàng</h1><p class="page-sub">' + (S.orders.length - cancelledCount) + ' đơn' + (cancelledCount ? ' · ' + cancelledCount + ' đã hủy' : '') + ' · bấm vào từng đơn để xem chi tiết, sửa đơn và cập nhật trạng thái</p>';
+    var html = '<h1 class="page-title">Đơn hàng</h1><p class="page-sub">Đơn xếp theo nhóm trạng thái trên cùng một màn hình — đổi trạng thái ở cột "Trạng thái", đơn tự nhảy sang nhóm mới. Bấm "Chi tiết" để sửa đơn.</p>';
     html += '<div class="toolbar">';
     html += '<select id="o-channel"><option value="">Mọi kênh</option>' + Object.keys(BCT.CHANNELS).map(function (k) {
       return '<option value="' + k + '"' + (ordFilter.channel === k ? ' selected' : '') + '>' + BCT.CHANNELS[k] + '</option>';
     }).join('') + '</select>';
-    html += '<select id="o-status"><option value="">Mọi trạng thái</option>' + Object.keys(BCT.ORDER_STATUSES).map(function (k) {
-      return '<option value="' + k + '"' + (ordFilter.status === k ? ' selected' : '') + '>' + BCT.ORDER_STATUSES[k] + '</option>';
-    }).join('') + '</select>';
     html += '<input type="month" id="o-month" value="' + BCT.esc(ordFilter.month) + '">';
     html += '<a class="btn secondary" href="#/ban" style="text-decoration:none;margin-left:auto">' + IC.plus + ' Tạo đơn mới</a>';
     html += '</div>';
-    html += '<section class="panel" style="padding:6px 22px"><table class="tbl"><thead><tr><th>Ngày</th><th>Kênh</th><th>Người mua</th><th>Trạng thái</th><th class="r">Số thẻ</th><th class="r">Doanh thu</th><th class="r">Lãi</th><th></th></tr></thead><tbody id="ord-body">' + ordRows() + '</tbody></table></section>';
+    html += orderGroupsHTML();
     return html;
   }
 
-  function ordRows() {
-    var list = S.orders.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+  // Mỗi nhóm trạng thái = 1 panel; nhóm trống vẫn hiện để không "mất đơn" khi đổi trạng thái.
+  function orderGroupsHTML() {
+    var list = S.orders.slice().sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (a.createdAt || '') < (b.createdAt || '') ? 1 : -1;
+    });
     if (ordFilter.channel) list = list.filter(function (o) { return o.channel === ordFilter.channel; });
     if (ordFilter.month) list = list.filter(function (o) { return o.date.indexOf(ordFilter.month) === 0; });
-    if (ordFilter.status) list = list.filter(function (o) { return (o.status || 'done') === ordFilter.status; });
-    if (!list.length) return '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px">Chưa có đơn nào khớp bộ lọc.</td></tr>';
+    var groups = {};
+    Object.keys(BCT.ORDER_STATUSES).forEach(function (st) { groups[st] = []; });
+    list.forEach(function (o) { groups[o.status || 'done'].push(o); });
+    var html = '';
     var tRev = 0, tProf = 0, tCount = 0;
-    var rows = list.map(function (o) {
-      var cancelled = o.status === 'cancelled';
-      var rev = BCT.orderRevenue(o), prof = BCT.orderProfit(o);
-      if (!cancelled) { tRev += rev; tProf += prof; tCount++; }
-      return '<tr' + (cancelled ? ' style="opacity:.55"' : '') + '><td>' + BCT.fmtDate(o.date) + '</td><td>' + BCT.CHANNELS[o.channel] + '</td><td>' + BCT.esc(o.buyer || '—') + '</td>' +
-        '<td>' + orderStatusTag(o) + '</td>' +
-        '<td class="r">' + BCT.orderQty(o) + '</td><td class="r">' + BCT.fmtVND(rev) + '</td>' +
-        '<td class="r ' + (prof >= 0 ? 'pos' : 'neg') + '">' + BCT.fmtVND(prof) + '</td>' +
-        '<td class="r"><a class="rowlink" href="#/donhang/' + o.id + '">Chi tiết →</a></td></tr>';
-    }).join('');
-    rows += '<tr><td colspan="5" style="font-weight:700;color:var(--muted)">TỔNG (' + tCount + ' đơn, không tính đơn hủy)</td><td class="r" style="font-weight:700">' + BCT.fmtVND(tRev) + '</td><td class="r ' + (tProf >= 0 ? 'pos' : 'neg') + '" style="font-weight:700">' + BCT.fmtVND(tProf) + '</td><td></td></tr>';
-    return rows;
+    BCT.ORDER_STATUS_FLOW.concat(['cancelled']).forEach(function (st) {
+      var g = groups[st];
+      var gRev = 0;
+      g.forEach(function (o) { gRev += BCT.orderRevenue(o); });
+      html += '<section class="panel" style="padding:6px 22px;margin-bottom:14px"><div class="panel-head" style="padding-top:12px"><h2 class="panel-title" style="font-size:16px">' + BCT.ORDER_STATUSES[st] + '</h2>' +
+        '<span class="s">' + g.length + ' đơn' + (st !== 'cancelled' && g.length ? ' · ' + BCT.fmtVND(gRev) : '') + '</span></div>';
+      if (!g.length) {
+        html += '<div class="empty" style="padding:14px">Chưa có đơn nào.</div></section>';
+        return;
+      }
+      html += '<table class="tbl"><thead><tr><th>Ngày</th><th>Kênh</th><th>Người mua</th><th class="r">Số thẻ</th><th class="r">Doanh thu</th><th class="r">Lãi</th><th>Trạng thái</th><th></th></tr></thead><tbody>';
+      html += g.map(function (o) {
+        var cancelled = st === 'cancelled';
+        var rev = BCT.orderRevenue(o), prof = BCT.orderProfit(o);
+        if (!cancelled) { tRev += rev; tProf += prof; tCount++; }
+        return '<tr' + (cancelled ? ' style="opacity:.55"' : '') + '><td>' + BCT.fmtDate(o.date) + '</td><td>' + BCT.CHANNELS[o.channel] + '</td><td>' + BCT.esc(o.buyer || '—') + '</td>' +
+          '<td class="r">' + BCT.orderQty(o) + '</td><td class="r">' + BCT.fmtVND(rev) + '</td>' +
+          '<td class="r ' + (prof >= 0 ? 'pos' : 'neg') + '">' + BCT.fmtVND(prof) + '</td>' +
+          '<td><select class="o-status-sel" data-oid="' + o.id + '">' +
+          Object.keys(BCT.ORDER_STATUSES).map(function (k) {
+            return '<option value="' + k + '"' + (k === st ? ' selected' : '') + '>' + BCT.ORDER_STATUSES[k] + '</option>';
+          }).join('') + '</select></td>' +
+          '<td class="r"><a class="rowlink" href="#/donhang/' + o.id + '">Chi tiết →</a></td></tr>';
+      }).join('');
+      html += '</tbody></table></section>';
+    });
+    html += '<section class="panel" style="padding:14px 22px"><b>TỔNG (' + tCount + ' đơn, không tính đơn hủy)</b> · Doanh thu <b class="mono">' + BCT.fmtVND(tRev) + '</b> · Lãi <b class="mono ' + (tProf >= 0 ? 'pos' : 'neg') + '">' + BCT.fmtVND(tProf) + '</b></section>';
+    return html;
   }
 
   function vOrderDetail(id) {
@@ -2299,10 +2317,22 @@
     }
 
     if (base === 'donhang' && !r.segs[1]) {
-      $('o-channel').addEventListener('change', function (e) { ordFilter.channel = e.target.value; $('ord-body').innerHTML = ordRows(); });
-      $('o-month').addEventListener('change', function (e) { ordFilter.month = e.target.value; $('ord-body').innerHTML = ordRows(); });
-      var osSel = $('o-status');
-      if (osSel) osSel.addEventListener('change', function (e) { ordFilter.status = e.target.value; $('ord-body').innerHTML = ordRows(); });
+      $('o-channel').addEventListener('change', function (e) { ordFilter.channel = e.target.value; render(); });
+      $('o-month').addEventListener('change', function (e) { ordFilter.month = e.target.value; render(); });
+      Array.prototype.slice.call(document.querySelectorAll('.o-status-sel')).forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          var oid = sel.getAttribute('data-oid');
+          var ns = sel.value;
+          var o = BCT.getOrder(S, oid);
+          if (!o || ns === o.status) return;
+          if (ns === 'cancelled' && !window.confirm('Hủy đơn này? Hàng sẽ hoàn về kho và đơn không tính doanh thu nữa.')) { render(); return; }
+          withLoading(async function () {
+            await BCT.setOrderStatus(S, oid, ns);
+            toast('Đơn đã chuyển sang: ' + BCT.ORDER_STATUSES[ns]);
+            render();
+          }).catch(function (err) { toast(err.message); render(); });
+        });
+      });
     }
 
     if (base === 'donhang' && r.segs[1]) {
