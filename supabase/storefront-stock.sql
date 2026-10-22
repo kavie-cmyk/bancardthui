@@ -9,8 +9,13 @@
 -- BIẾN MẤT khỏi store. Hủy đơn (hoàn kho) / nhập thêm → tự hiện lại.
 -- Các cột và quyền giữ nguyên như view cũ.
 -- =====================================================================
+-- LƯU Ý khi chạy: phải DROP view cũ trước (sum() trả bigint, CREATE OR
+-- REPLACE không cho đổi kiểu cột qty integer → bigint, lỗi 42P16).
+-- =====================================================================
 
-create or replace view public.storefront_listings as
+drop view if exists public.storefront_listings;
+
+create view public.storefront_listings as
 select
   l.id          as listing_id,
   l.price,
