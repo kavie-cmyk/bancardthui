@@ -368,44 +368,57 @@
       return '<button type="button" class="chip" data-mycode="' + esc(o.code) + '" data-myphone="' + esc(o.phone) + '">Đơn ' + esc(o.code) + '</button>';
     }).join(' ');
   }
+  function trackCardHTML(data) {
+    var when = data.created_at ? new Date(data.created_at) : null;
+    var whenTxt = when ? when.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+    var lines = (data.items || []).map(function (it) {
+      return '<div class="cart-line"><div class="cl-info"><div class="cl-name">' + esc(it.name || '') + '</div>' +
+        '<div class="cl-sub">' + fmtVND(it.price) + ' × ' + it.qty + '</div></div>' +
+        '<div class="cl-total">' + fmtVND((Number(it.price) || 0) * (Number(it.qty) || 0)) + '</div></div>';
+    }).join('');
+    return '<div class="track-card">' +
+      '<div class="track-status">' + (TRACK_STATUS[data.status] || data.status) + '</div>' +
+      '<div class="cl-sub">Đơn ' + esc(String(data.code || '').toUpperCase()) + ' · ' + esc(data.customer_name || '') + (whenTxt ? ' · đặt lúc ' + whenTxt : '') + '</div>' +
+      lines +
+      '<div class="cart-sumrow"><span>Tiền hàng</span><span>' + fmtVND(data.total) + '</span></div>' +
+      (Number(data.shipping_fee) > 0 ? '<div class="cart-sumrow"><span>Phí ship</span><span>' + fmtVND(data.shipping_fee) + '</span></div>' : '') +
+      '<div class="cart-sumrow"><span><b>Tổng cộng</b></span><b>' + fmtVND((Number(data.total) || 0) + (Number(data.shipping_fee) || 0)) + '</b></div>' +
+      '</div>';
+  }
   async function trackOrder() {
     var box = document.getElementById('track-result');
     var code = document.getElementById('track-code').value.trim();
-    var phone = validPhone(document.getElementById('track-phone').value);
-    if (!code) { box.innerHTML = '<p class="track-err">Bạn nhập mã đơn giúp shop nhé.</p>'; return; }
-    if (!phone) { box.innerHTML = '<p class="track-err">Số điện thoại chưa đúng — nhập đúng số đã dùng khi đặt hàng.</p>'; return; }
+    var phoneRaw = document.getElementById('track-phone').value.trim();
+    var body;
+    if (code) {
+      body = { p_code: code, p_phone: null }; // có mã đơn thì tra theo mã, không cần SĐT
+    } else if (phoneRaw) {
+      var phone = validPhone(phoneRaw);
+      if (!phone) { box.innerHTML = '<p class="track-err">Số điện thoại chưa đúng định dạng — bạn kiểm tra lại giúp shop nhé.</p>'; return; }
+      body = { p_code: null, p_phone: phone };
+    } else {
+      box.innerHTML = '<p class="track-err">Bạn nhập mã đơn hoặc số điện thoại đã dùng khi đặt hàng giúp shop nhé.</p>';
+      return;
+    }
     box.innerHTML = '<p class="track-hint">Đang tra cứu…</p>';
     try {
-      var res = await fetch(window.SUPABASE_URL + '/rest/v1/rpc/track_store_order', {
+      var res = await fetch(window.SUPABASE_URL + '/rest/v1/rpc/track_store_orders', {
         method: 'POST',
         headers: {
           'apikey': window.SUPABASE_ANON_KEY,
           'Authorization': 'Bearer ' + window.SUPABASE_ANON_KEY,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ p_code: code, p_phone: phone })
+        body: JSON.stringify(body)
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      var data = await res.json();
-      if (!data) {
-        box.innerHTML = '<p class="track-err">Không tìm thấy đơn — kiểm tra lại mã đơn và số điện thoại (phải là số đã dùng khi đặt).</p>';
+      var list = await res.json();
+      if (!Array.isArray(list) || !list.length) {
+        box.innerHTML = '<p class="track-err">Không tìm thấy đơn — kiểm tra lại mã đơn hoặc số điện thoại (phải là số đã dùng khi đặt).</p>';
         return;
       }
-      var when = data.created_at ? new Date(data.created_at) : null;
-      var whenTxt = when ? when.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-      var lines = (data.items || []).map(function (it) {
-        return '<div class="cart-line"><div class="cl-info"><div class="cl-name">' + esc(it.name || '') + '</div>' +
-          '<div class="cl-sub">' + fmtVND(it.price) + ' × ' + it.qty + '</div></div>' +
-          '<div class="cl-total">' + fmtVND((Number(it.price) || 0) * (Number(it.qty) || 0)) + '</div></div>';
-      }).join('');
-      box.innerHTML = '<div class="track-card">' +
-        '<div class="track-status">' + (TRACK_STATUS[data.status] || data.status) + '</div>' +
-        '<div class="cl-sub">Đơn ' + esc(String(data.code || '').toUpperCase()) + ' · ' + esc(data.customer_name || '') + (whenTxt ? ' · đặt lúc ' + whenTxt : '') + '</div>' +
-        lines +
-        '<div class="cart-sumrow"><span>Tiền hàng</span><span>' + fmtVND(data.total) + '</span></div>' +
-        (Number(data.shipping_fee) > 0 ? '<div class="cart-sumrow"><span>Phí ship</span><span>' + fmtVND(data.shipping_fee) + '</span></div>' : '') +
-        '<div class="cart-sumrow"><span><b>Tổng cộng</b></span><b>' + fmtVND((Number(data.total) || 0) + (Number(data.shipping_fee) || 0)) + '</b></div>' +
-        '</div>';
+      box.innerHTML = (list.length > 1 ? '<p class="track-hint">Tìm thấy ' + list.length + ' đơn:</p>' : '') +
+        list.map(trackCardHTML).join('');
     } catch (e) {
       box.innerHTML = '<p class="track-err">Tra cứu chưa được — bạn thử lại sau ít phút nhé.</p>';
     }
