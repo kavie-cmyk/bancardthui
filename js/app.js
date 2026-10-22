@@ -1798,14 +1798,23 @@
     if (!shown.length) {
       html += '<section class="panel"><div class="empty"><h3>Chưa có tin rao nào</h3><p>Tạo tin rao đầu tiên ở form phía trên. Tin ở trạng thái Nháp chỉ nằm trong app quản lý này.</p></div></section>';
     } else {
-      html += '<section class="panel" style="padding:6px 22px"><table class="tbl"><thead><tr><th>Card</th><th class="r">Giá rao</th><th class="r">SL rao</th><th class="r">Tồn kho</th><th>Kênh</th><th>Trạng thái</th><th></th></tr></thead><tbody>';
+      html += '<section class="panel" style="padding:6px 22px"><table class="tbl"><thead><tr><th>Card</th><th class="r">Giá rao</th><th class="r">SL rao</th><th class="r">Tồn kho</th><th class="r">Store hiện</th><th>Kênh</th><th>Trạng thái</th><th></th></tr></thead><tbody>';
       html += shown.map(function (l) {
         var c = BCT.getCard(S, l.cardId);
         var stock = c ? BCT.stockOf(S, c.id) : 0;
+        // Số khách thấy trên store = min(SL rao, tồn thật) — khớp view storefront_listings;
+        // tin gắn 1 lô cụ thể thì tính theo tồn của đúng lô đó.
+        var eff = null;
+        if (l.status === 'active') {
+          if (l.lotId) { var lt = lotById(l.lotId); eff = Math.min(l.qty, lt ? lt.qtyRemaining : 0); }
+          else eff = Math.min(l.qty, stock);
+        }
+        var effCell = eff === null ? '—' : (eff === 0 ? '<span class="secret-tag">ẨN — HẾT KHO</span>' : String(eff) + (eff < l.qty ? ' <span class="s">(theo tồn)</span>' : ''));
         return '<tr><td>' + (c ? '<a class="rowlink" href="#/kho/' + c.id + '">' + BCT.esc(c.name) + '</a><div style="color:var(--muted);font-size:12px">' + BCT.esc(c.set || '') + (c.number ? ' · #' + BCT.esc(c.number) : '') + '</div>' : '(card đã bị xóa)') + '</td>' +
           '<td class="r">' + BCT.fmtVND(l.price) + '</td>' +
           '<td class="r">' + l.qty + (l.qty > stock ? ' <span class="secret-tag">VƯỢT TỒN</span>' : '') + '</td>' +
           '<td class="r">' + stock + '</td>' +
+          '<td class="r">' + effCell + '</td>' +
           '<td>' + (l.channel ? BCT.CHANNELS[l.channel] || l.channel : '—') + '</td>' +
           '<td><select data-listing-status="' + l.id + '">' + BCT.LISTING_STATUSES.map(function (s) { return '<option value="' + s + '"' + (l.status === s ? ' selected' : '') + '>' + BCT.LISTING_STATUS_LABELS[s] + '</option>'; }).join('') + '</select></td>' +
           '<td class="r"><button type="button" class="btn-ghost" data-listing-del="' + l.id + '">Xóa</button></td></tr>';
