@@ -56,7 +56,8 @@
     ebay: 'eBay',
     shopee: 'Shopee',
     facebook: 'Facebook',
-    tructiep: 'Trực tiếp'
+    tructiep: 'Trực tiếp',
+    website: 'Website'
   };
 
   var CONDITIONS = ['New Mint', 'A', 'B', 'C', 'D'];
@@ -215,6 +216,20 @@
     };
   }
 
+  // Đơn khách đặt trên storefront (bảng store_orders). items là snapshot
+  // [{listing_id, card_id, name, price, qty}] tại thời điểm khách gửi.
+  function mapStoreOrder(r) {
+    return {
+      id: r.id, customerName: r.customer_name || '', phone: r.phone || '',
+      address: r.address || '', note: r.note || '',
+      items: Array.isArray(r.items) ? r.items : [],
+      total: Number(r.total) || 0,
+      status: r.status || 'new',
+      convertedOrderId: r.converted_order_id || null,
+      createdAt: r.created_at || null
+    };
+  }
+
   // Cột có thể chưa tồn tại trong DB (chỉ có anon key, không tự ALTER).
   // Thử insert kèm cột → lỗi thì insert lại không có cột đó + cảnh báo (cache kết quả).
   var _missingCols = {};
@@ -284,7 +299,7 @@
   // ---------- load ----------
   // Cờ "đã qua lần nạp mẫu đầu tiên / đã xóa mẫu" — lưu local.
   function blankState() {
-    return { cards: [], lots: [], orders: [], setTotals: {}, customSets: [], listings: [] };
+    return { cards: [], lots: [], orders: [], setTotals: {}, customSets: [], listings: [], storeOrders: [] };
   }
 
   async function load() {
@@ -298,6 +313,9 @@
     // Lỗi ở đây KHÔNG được làm sập toàn bộ app: thiếu bảng thì coi như chưa có rao bán.
     var listings = [];
     try { listings = await SB.q('listings', { order: 'created_at.asc' }); } catch (e) { listings = []; }
+    // Đơn đặt từ storefront (bảng store_orders) — DB chưa chạy SQL thì coi như rỗng.
+    var storeOrders = [];
+    try { storeOrders = await SB.q('store_orders', { order: 'created_at.desc' }); } catch (e) { storeOrders = []; }
 
     var imgByCard = {};
     images.forEach(function (r) {
@@ -310,6 +328,7 @@
     state.orders = orders.map(mapOrder);
     state.customSets = csets.map(mapCustomSet);
     state.listings = listings.map(mapListing);
+    state.storeOrders = storeOrders.map(mapStoreOrder);
     totals.forEach(function (r) { state.setTotals[r.set_key] = r.total; });
 
     return state;
@@ -1573,6 +1592,42 @@
     return true;
   }
 
+  // ---------- đơn đặt từ storefront ----------
+  function getStoreOrder(state, id) {
+    return (state.storeOrders || []).filter(function (o) { return o.id === id; })[0] || null;
+  }
+
+  async function setStoreOrderStatus(state, id, status) {
+    if (['new', 'done', 'cancelled'].indexOf(status) < 0) throw new Error('Trạng thái đơn web không hợp lệ.');
+    var r = (await SB.upd('store_orders', { status: status }, { id: id }))[0];
+    var o = getStoreOrder(state, id);
+    if (o && r) { o.status = r.status; o.convertedOrderId = r.converted_order_id || o.convertedOrderId; }
+    return o;
+  }
+
+  // Xác nhận đơn web → tạo đơn bán thật (kênh 'website', trừ kho FIFO).
+  // Thiếu hàng thì createOrder ném lỗi và đơn web giữ nguyên 'new'.
+  async function convertStoreOrder(state, id) {
+    var o = getStoreOrder(state, id);
+    if (!o) throw new Error('Không tìm thấy đơn web.');
+    if (o.status !== 'new') throw new Error('Đơn web này đã được xử lý rồi.');
+    if (!o.items.length) throw new Error('Đơn web không có dòng hàng nào.');
+    var lines = o.items.map(function (it) {
+      return { cardId: it.card_id, qty: it.qty, sellPrice: it.price };
+    });
+    var order = await createOrder(state, {
+      date: todayISO(),
+      channel: 'website',
+      buyer: (o.customerName + (o.phone ? ' — ' + o.phone : '')).trim(),
+      fees: 0, shippingFee: 0,
+      note: ('Đơn từ web: ' + o.address + (o.note ? ' · Ghi chú: ' + o.note : '')).trim(),
+      lines: lines
+    });
+    var r = (await SB.upd('store_orders', { status: 'done', converted_order_id: order.id }, { id: id }))[0];
+    if (r) { o.status = 'done'; o.convertedOrderId = order.id; }
+    return order;
+  }
+
   async function wipeAll() {
     await SB.delAll('card_images', 'id');
     await SB.delAll('inventory_lots', 'id');
@@ -1638,6 +1693,7 @@
     LISTING_STATUSES: LISTING_STATUSES, LISTING_STATUS_LABELS: LISTING_STATUS_LABELS,
     listingsOfCard: listingsOfCard, getListing: getListing,
     createListing: createListing, updateListing: updateListing, deleteListing: deleteListing,
+    getStoreOrder: getStoreOrder, setStoreOrderStatus: setStoreOrderStatus, convertStoreOrder: convertStoreOrder,
     getCardSightKey: getCardSightKey, setCardSightKey: setCardSightKey,
     getCardSightKeys: getCardSightKeys, addCardSightKey: addCardSightKey, removeCardSightKey: removeCardSightKey,
     syncCardSightKeys: syncCardSightKeys,

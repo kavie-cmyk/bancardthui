@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/store.css?v=20261021-sf1">
+<link rel="stylesheet" href="css/store.css?v=20261021-sf2">
 </head>
 <body>
 <header class="shop-head">
@@ -43,13 +43,45 @@
   <div id="grid" class="shop-grid"></div>
 
   <footer class="shop-foot">
-    <p><b>Cách mua:</b> nhắn tin cho shop qua Messenger hoặc Zalo, gửi tên lá bạn muốn — shop xác nhận còn hàng và hướng dẫn thanh toán, ship COD toàn quốc.</p>
+    <p><b>Cách mua:</b> chọn lá → "Thêm vào giỏ" → mở giỏ và gửi đơn. Shop sẽ gọi/Zalo xác nhận còn hàng, báo phí ship rồi mới giao — thanh toán COD hoặc chuyển khoản khi nhận hàng. Cần tư vấn nhanh thì nhắn Messenger/Zalo cho shop.</p>
     <p class="dim">Trang này chỉ hiển thị các lá đang bán. Giá và số lượng cập nhật theo kho thực tế của shop.</p>
   </footer>
 </main>
 
-<script src="js/config.js?v=20261021-sf1"></script>
-<script src="js/sets-db.js?v=20261021-sf1"></script>
-<script src="js/storefront.js?v=20261021-sf1"></script>
+<button id="cart-fab" type="button" hidden><span id="cart-fab-txt">Giỏ hàng</span></button>
+
+<div id="cart-drawer" hidden>
+  <div class="cart-panel">
+    <div class="cart-head">
+      <b>Giỏ hàng &amp; đặt mua</b>
+      <button id="cart-close" type="button" aria-label="Đóng giỏ hàng">×</button>
+    </div>
+    <div id="cart-main">
+      <div id="cart-items"></div>
+      <div class="cart-sumrow"><span>Tổng tiền hàng</span><b id="cart-sum">0₫</b></div>
+      <p class="cart-note">Chưa gồm phí ship — shop sẽ báo phí ship khi gọi xác nhận đơn.</p>
+      <form id="co-form">
+        <label>Họ tên người nhận *<input id="co-name" type="text" autocomplete="name" placeholder="vd Nguyễn Văn A"></label>
+        <label>Số điện thoại *<input id="co-phone" type="tel" autocomplete="tel" placeholder="vd 09xx xxx xxx"></label>
+        <label>Địa chỉ nhận hàng *<textarea id="co-address" rows="2" autocomplete="street-address" placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành"></textarea></label>
+        <label>Ghi chú cho shop<textarea id="co-note" rows="2" placeholder="vd Giao giờ hành chính, cần đóng gói kỹ…"></textarea></label>
+        <input id="co-website" type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
+        <div id="co-msg" class="co-msg" role="alert"></div>
+        <button id="co-submit" type="submit" class="co-btn">Gửi đơn đặt hàng</button>
+      </form>
+    </div>
+    <div id="cart-success" hidden>
+      <div class="success-emoji">🎉</div>
+      <h2>Đã gửi đơn thành công!</h2>
+      <p>Tổng tiền hàng: <b id="success-total"></b> (chưa gồm ship).</p>
+      <p>Shop sẽ gọi điện/Zalo xác nhận đơn và báo phí ship trước khi giao. Cảm ơn bạn đã ủng hộ Bán Card Thui!</p>
+      <button id="success-close" type="button" class="co-btn">Tiếp tục xem hàng</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js?v=20261021-sf2"></script>
+<script src="js/sets-db.js?v=20261021-sf2"></script>
+<script src="js/storefront.js?v=20261021-sf2"></script>
 </body>
 </html>

@@ -204,7 +204,8 @@
     { path: '#/quet', label: 'Quét thẻ', icon: IC.card },
     { path: '#/ban', label: 'Bán hàng', icon: IC.tag },
     { path: '#/rao', label: 'Rao bán', icon: IC.coin },
-    { path: '#/donhang', label: 'Đơn hàng', icon: IC.receipt }
+    { path: '#/donhang', label: 'Đơn hàng', icon: IC.receipt },
+    { path: '#/donweb', label: 'Đơn từ web', icon: IC.receipt }
   ];
 
   function renderNav(active) {
@@ -221,10 +222,12 @@
         };
       }
     }
-    var rsIcons = ['town-map', 'pokeblock-case', 'card-key', 'poke-ball', 'exp-share', 'amulet-coin', 'exp-share', 'harbor-mail'];
+    var rsIcons = ['town-map', 'pokeblock-case', 'card-key', 'poke-ball', 'exp-share', 'amulet-coin', 'exp-share', 'harbor-mail', 'harbor-mail'];
+    var webNew = (S && S.storeOrders ? S.storeOrders.filter(function (o) { return o.status === 'new'; }).length : 0);
     document.getElementById('nav').innerHTML = NAV.map(function (n, i) {
       var on = active === n.path || (n.path !== '#/dashboard' && active.indexOf(n.path) === 0 && active !== '#/dashboard');
-      return '<a href="' + n.path + '" class="' + (on ? 'active' : '') + '">' + '<img class="rs-nav-icon" src="assets/hoenn/' + rsIcons[i] + '.png" alt="" width="32" height="32" loading="lazy">' + n.icon + n.label + '</a>';
+      var label = n.label + (n.path === '#/donweb' && webNew > 0 ? ' (' + webNew + ')' : '');
+      return '<a href="' + n.path + '" class="' + (on ? 'active' : '') + '">' + '<img class="rs-nav-icon" src="assets/hoenn/' + rsIcons[i] + '.png" alt="" width="32" height="32" loading="lazy">' + n.icon + label + '</a>';
     }).join('');
     document.getElementById('brand-icon').innerHTML = IC.card;
   }
@@ -257,6 +260,7 @@
     else if (base === 'ban') app.innerHTML = vBan(r.query.card || '');
     else if (base === 'rao') app.innerHTML = vListings(r.query);
     else if (base === 'donhang') app.innerHTML = r.segs[1] ? vOrderDetail(r.segs[1]) : vDonHang();
+    else if (base === 'donweb') app.innerHTML = vDonWeb();
     else app.innerHTML = vDashboard();
     bind(base, r);
   }
@@ -1568,6 +1572,85 @@
     });
   }
 
+  /* ================= VIEW: ĐƠN TỪ WEB (store_orders) ================= */
+  var webFilter = 'new';
+  var WEB_STATUS_LABEL = { new: 'Mới — chờ xác nhận', done: 'Đã xử lý', cancelled: 'Đã hủy' };
+  function vDonWeb() {
+    var orders = (S.storeOrders || []).slice().sort(function (a, b) { return String(a.createdAt || '') < String(b.createdAt || '') ? 1 : -1; });
+    var counts = { all: orders.length, new: 0, done: 0, cancelled: 0 };
+    orders.forEach(function (o) { counts[o.status] = (counts[o.status] || 0) + 1; });
+    var shown = webFilter === 'all' ? orders : orders.filter(function (o) { return o.status === webFilter; });
+    var html = '<h1 class="page-title">Đơn từ web</h1><p class="page-sub">' + counts.new + ' đơn mới đang chờ xác nhận · Đơn web <b>chưa trừ kho</b> — gọi/Zalo xác nhận với khách trước, rồi bấm "Tạo đơn bán" để trừ kho thật (FIFO) và ghi nhận doanh thu.</p>';
+    html += '<div class="field" style="max-width:280px;margin-bottom:14px"><label>Lọc trạng thái</label><select id="w-filter">' +
+      [['new', 'Mới (' + counts.new + ')'], ['all', 'Tất cả (' + counts.all + ')'], ['done', 'Đã xử lý (' + counts.done + ')'], ['cancelled', 'Đã hủy (' + counts.cancelled + ')']]
+        .map(function (p) { return '<option value="' + p[0] + '"' + (webFilter === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('') + '</select></div>';
+    if (!shown.length) html += '<section class="panel"><div class="empty" style="padding:28px">Chưa có đơn nào ở mục này.</div></section>';
+    html += shown.map(webOrderHTML).join('');
+    return html;
+  }
+
+  function webOrderHTML(o) {
+    var when = o.createdAt ? new Date(o.createdAt) : null;
+    var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    var whenTxt = when ? p2(when.getDate()) + '/' + p2(when.getMonth() + 1) + '/' + when.getFullYear() + ' ' + p2(when.getHours()) + ':' + p2(when.getMinutes()) : '';
+    var badgeCls = o.status === 'new' ? 'border-color:var(--gold-dim);color:var(--gold-soft)' : (o.status === 'done' ? 'border-color:#3f7a45;color:#8fd694' : 'color:var(--muted)');
+    var html = '<section class="panel" style="margin-bottom:14px"><div class="panel-head"><h2 class="panel-title" style="font-size:16px">' +
+      BCT.esc(o.customerName) + ' · <span class="mono">' + BCT.fmtVND(o.total) + '</span></h2>' +
+      '<span class="tag" style="' + badgeCls + '">' + WEB_STATUS_LABEL[o.status] + '</span></div>';
+    html += '<div class="s" style="margin-bottom:8px">' + whenTxt + ' · SĐT: <a href="tel:' + BCT.esc(o.phone) + '">' + BCT.esc(o.phone) + '</a> · Địa chỉ: ' + BCT.esc(o.address) + (o.note ? ' · Ghi chú: ' + BCT.esc(o.note) : '') + '</div>';
+    html += o.items.map(function (it) {
+      return '<div class="rowline"><div class="grow"><div class="t">' + BCT.esc(it.name || '') + '</div>' +
+        '<div class="s mono">' + BCT.fmtVND(it.price) + ' × ' + it.qty + '</div></div>' +
+        '<div class="mono">' + BCT.fmtVND((Number(it.price) || 0) * (Number(it.qty) || 0)) + '</div></div>';
+    }).join('');
+    if (o.status === 'new') {
+      html += '<div class="form-actions" style="margin-top:12px">' +
+        '<button type="button" class="btn" data-wconvert="' + o.id + '">Tạo đơn bán &amp; trừ kho</button>' +
+        '<button type="button" class="btn-ghost" data-wdone="' + o.id + '">Đã xử lý tay</button>' +
+        '<button type="button" class="btn-ghost" data-wcancel="' + o.id + '">Hủy đơn</button></div>';
+    } else if (o.status === 'done' && o.convertedOrderId) {
+      html += '<div class="s" style="margin-top:10px">Đã chuyển thành đơn bán — <a href="#/donhang/' + o.convertedOrderId + '">xem đơn</a>.</div>';
+    }
+    return html + '</section>';
+  }
+
+  function bindDonWeb() {
+    var f = $('w-filter');
+    if (f) f.addEventListener('change', function () { webFilter = f.value; render(); });
+    Array.prototype.slice.call(document.querySelectorAll('[data-wconvert]')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-wconvert');
+        if (!confirm('Tạo đơn bán thật từ đơn web này? Kho sẽ bị trừ theo FIFO.')) return;
+        withLoading(async function () {
+          var order = await BCT.convertStoreOrder(S, id);
+          toast('Đã tạo đơn bán · lãi ' + BCT.fmtVND(BCT.orderProfit(order)) + '.');
+          render();
+        }).catch(function (err) { toast(err.message); });
+      });
+    });
+    Array.prototype.slice.call(document.querySelectorAll('[data-wdone]')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-wdone');
+        withLoading(async function () {
+          await BCT.setStoreOrderStatus(S, id, 'done');
+          toast('Đã đánh dấu xử lý xong.');
+          render();
+        }).catch(function (err) { toast(err.message); });
+      });
+    });
+    Array.prototype.slice.call(document.querySelectorAll('[data-wcancel]')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-wcancel');
+        if (!confirm('Hủy đơn web này? (đơn chưa trừ kho nên không cần hoàn kho)')) return;
+        withLoading(async function () {
+          await BCT.setStoreOrderStatus(S, id, 'cancelled');
+          toast('Đã hủy đơn web.');
+          render();
+        }).catch(function (err) { toast(err.message); });
+      });
+    });
+  }
+
   /* ================= VIEW: RAO BÁN (listings — Phase 2, quản lý nội bộ) ================= */
   var listingFilter = { status: '' };
   function vListings(q) {
@@ -1991,6 +2074,8 @@
       $('o-channel').addEventListener('change', function (e) { ordFilter.channel = e.target.value; $('ord-body').innerHTML = ordRows(); });
       $('o-month').addEventListener('change', function (e) { ordFilter.month = e.target.value; $('ord-body').innerHTML = ordRows(); });
     }
+
+    if (base === 'donweb') bindDonWeb();
 
     if (base === 'quet') {
       var xSave = $('cs-save');
