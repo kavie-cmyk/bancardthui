@@ -100,10 +100,16 @@ em { font-style: normal; color: var(--gold-soft); }
 .badge.gold { color: var(--gold-soft); border-color: #6b5518; }
 .badge.graded { color: #0e2412; background: var(--green); border-color: var(--green); font-weight: 700; }
 .tile-price {
-  margin-top: auto; font-family: "IBM Plex Mono", monospace;
+  font-family: "IBM Plex Mono", monospace;
   font-size: 19px; font-weight: 600; color: var(--gold-soft);
 }
-.tile-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+/* Cụm giá + nút mua luôn dính đáy ô: margin-top:auto trên .tile-meta đẩy
+   cả cụm (giá/số còn + nút Thêm vào giỏ/stepper) xuống đáy tile-body,
+   bất kể tên lá dài ngắn hay số huy hiệu nhiều ít — mọi ô thẳng hàng nhau. */
+.tile-meta {
+  margin-top: auto; padding-top: 6px;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
 .tile-qty { color: var(--green); font-size: 13px; font-weight: 600; }
 .buy-btn {
   display: block; width: 100%; text-align: center; margin-top: 8px;
