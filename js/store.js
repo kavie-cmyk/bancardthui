@@ -192,6 +192,14 @@
     };
   }
 
+  // Tiến độ đơn bán: new → confirmed → packing → shipping → done (+ cancelled).
+  // Đơn cũ (trước khi có cột status) mặc định 'done'.
+  var ORDER_STATUSES = {
+    new: 'Chờ xác nhận', confirmed: 'Đã xác nhận', packing: 'Đang đóng gói',
+    shipping: 'Đang vận chuyển', done: 'Hoàn thành', cancelled: 'Đã hủy'
+  };
+  var ORDER_STATUS_FLOW = ['new', 'confirmed', 'packing', 'shipping', 'done'];
+
   function mapOrder(r) {
     return {
       id: r.id, date: r.date, channel: r.channel,
@@ -199,7 +207,8 @@
         return { cardId: it.card_id, lotId: it.lot_id, qty: it.qty, sellPrice: it.sell_price, costPerUnit: it.cost_per_unit };
       }),
       fees: r.fees || 0, shippingFee: r.shipping_fee || 0,
-      buyer: r.buyer || '', note: r.note || '', createdAt: r.created_at || null
+      buyer: r.buyer || '', note: r.note || '', createdAt: r.created_at || null,
+      status: r.status || 'done'
     };
   }
 
@@ -643,11 +652,135 @@
       fees: Math.round(Number(input.fees) || 0),
       shipping_fee: Math.round(Number(input.shippingFee) || 0),
       buyer: input.buyer || '',
-      note: input.note || ''
+      note: input.note || '',
+      status: input.status || 'new'
     }]))[0];
     var order = mapOrder(r);
     state.orders.push(order);
     return order;
+  }
+
+  function getOrder(state, id) {
+    for (var i = 0; i < state.orders.length; i++) if (state.orders[i].id === id) return state.orders[i];
+    return null;
+  }
+
+  // Hoàn kho: cộng lại qty_remaining cho từng lô mà đơn đã trừ.
+  async function restoreAllocations(state, order) {
+    for (var i = 0; i < order.items.length; i++) {
+      var it = order.items[i];
+      var lot = null;
+      for (var j = 0; j < state.lots.length; j++) if (state.lots[j].id === it.lotId) { lot = state.lots[j]; break; }
+      if (!lot) continue;
+      var next = lot.qtyRemaining + it.qty;
+      if (next > lot.qty) next = lot.qty;
+      await SB.upd('inventory_lots', { qty_remaining: next }, { id: lot.id });
+      lot.qtyRemaining = next;
+    }
+  }
+
+  function orderDbItems(items) {
+    return items.map(function (it) {
+      return { card_id: it.cardId, lot_id: it.lotId, qty: it.qty, sell_price: it.sellPrice, cost_per_unit: it.costPerUnit };
+    });
+  }
+
+  // Sửa đơn bán: thông tin + dòng hàng. Dòng hàng sửa = hoàn kho phần cũ,
+  // trừ FIFO lại theo phần mới (kiểm tra đủ hàng TRƯỚC khi đụng vào kho,
+  // tính cả phần hàng của chính đơn này).
+  async function updateOrder(state, id, patch) {
+    var o = getOrder(state, id);
+    if (!o) throw new Error('Không tìm thấy đơn.');
+    var row = {};
+    if (patch.date) row.date = patch.date;
+    if (patch.channel) row.channel = patch.channel;
+    if (patch.buyer !== undefined) row.buyer = String(patch.buyer || '');
+    if (patch.note !== undefined) row.note = String(patch.note || '');
+    if (patch.fees !== undefined) row.fees = Math.round(Number(patch.fees) || 0);
+    if (patch.shippingFee !== undefined) row.shipping_fee = Math.round(Number(patch.shippingFee) || 0);
+    if (patch.lines) {
+      if (o.status === 'cancelled') throw new Error('Đơn đã hủy — hãy mở lại đơn (đổi trạng thái) trước khi sửa dòng hàng.');
+      if (!patch.lines.length) throw new Error('Đơn hàng phải có ít nhất 1 dòng.');
+      var norm = patch.lines.map(function (ln) {
+        return { cardId: ln.cardId, qty: Math.floor(Number(ln.qty) || 0), sellPrice: Math.round(Number(ln.sellPrice) || 0) };
+      });
+      norm.forEach(function (ln) {
+        if (!ln.cardId || ln.qty <= 0) throw new Error('Số lượng phải lớn hơn 0.');
+        if (ln.sellPrice < 0) throw new Error('Giá bán không hợp lệ.');
+      });
+      // Kiểm tra đủ hàng trước: tồn hiện tại + phần đơn này đang giữ.
+      var own = {};
+      o.items.forEach(function (it) { own[it.cardId] = (own[it.cardId] || 0) + it.qty; });
+      var need = {};
+      norm.forEach(function (ln) { need[ln.cardId] = (need[ln.cardId] || 0) + ln.qty; });
+      Object.keys(need).forEach(function (cid) {
+        var avail = stockOf(state, cid) + (own[cid] || 0);
+        if (need[cid] > avail) {
+          var c = getCard(state, cid);
+          throw new Error('Không đủ hàng cho "' + (c ? c.name : cid) + '": cần ' + need[cid] + ', khả dụng ' + avail + ' (gồm cả phần đơn này đang giữ).');
+        }
+      });
+      await restoreAllocations(state, o);
+      var items = [];
+      for (var i = 0; i < norm.length; i++) {
+        var plan = await consumeFIFO(state, norm[i].cardId, norm[i].qty);
+        plan.forEach(function (p) {
+          items.push({ cardId: norm[i].cardId, lotId: p.lotId, qty: p.qty, sellPrice: norm[i].sellPrice, costPerUnit: p.costPerUnit });
+        });
+      }
+      row.items = orderDbItems(items);
+      o.items = items;
+    }
+    var r = (await SB.upd('orders', row, { id: id }))[0];
+    if (r) {
+      var m = mapOrder(r);
+      Object.keys(m).forEach(function (k) { if (k !== 'items' || !row.items) o[k] = m[k]; });
+      if (row.items) o.items = m.items;
+    }
+    return o;
+  }
+
+  // Đổi trạng thái đơn. Sang 'cancelled' = hoàn kho + loại khỏi doanh thu;
+  // từ 'cancelled' mở lại = trừ FIFO lại theo dòng hàng đã lưu.
+  async function setOrderStatus(state, id, status) {
+    var o = getOrder(state, id);
+    if (!o) throw new Error('Không tìm thấy đơn.');
+    if (!ORDER_STATUSES[status]) throw new Error('Trạng thái không hợp lệ.');
+    if (o.status === status) return o;
+    if (status === 'cancelled') {
+      await restoreAllocations(state, o);
+    } else if (o.status === 'cancelled') {
+      var need = {};
+      o.items.forEach(function (it) { need[it.cardId] = (need[it.cardId] || 0) + it.qty; });
+      Object.keys(need).forEach(function (cid) {
+        if (need[cid] > stockOf(state, cid)) {
+          var c = getCard(state, cid);
+          throw new Error('Không đủ hàng để mở lại đơn: "' + (c ? c.name : cid) + '" cần ' + need[cid] + ', kho còn ' + stockOf(state, cid) + '.');
+        }
+      });
+      var groups = {};
+      o.items.forEach(function (it) {
+        var k = it.cardId + '|' + it.sellPrice;
+        if (!groups[k]) groups[k] = { cardId: it.cardId, qty: 0, sellPrice: it.sellPrice };
+        groups[k].qty += it.qty;
+      });
+      var items = [];
+      var keys = Object.keys(groups);
+      for (var i = 0; i < keys.length; i++) {
+        var g = groups[keys[i]];
+        var plan = await consumeFIFO(state, g.cardId, g.qty);
+        plan.forEach(function (p) {
+          items.push({ cardId: g.cardId, lotId: p.lotId, qty: p.qty, sellPrice: g.sellPrice, costPerUnit: p.costPerUnit });
+        });
+      }
+      var rr = (await SB.upd('orders', { items: orderDbItems(items), status: status }, { id: id }))[0];
+      if (rr) o.items = mapOrder(rr).items;
+      o.status = status;
+      return o;
+    }
+    await SB.upd('orders', { status: status }, { id: id });
+    o.status = status;
+    return o;
   }
 
   // ---------- dashboard aggregates (sync) ----------
@@ -658,13 +791,15 @@
       stock += s;
       capital += s * avgCostOf(state, c.id);
     });
-    var revenue = 0, profit = 0, sold = 0;
+    var revenue = 0, profit = 0, sold = 0, orderCount = 0;
     state.orders.forEach(function (o) {
+      if (o.status === 'cancelled') return; // đơn hủy: không tính doanh thu/lãi/số bán
       revenue += orderRevenue(o);
       profit += orderProfit(o);
       sold += orderQty(o);
+      orderCount++;
     });
-    return { stock: stock, capital: capital, revenue: revenue, profit: profit, sold: sold, orders: state.orders.length };
+    return { stock: stock, capital: capital, revenue: revenue, profit: profit, sold: sold, orders: orderCount };
   }
 
   function weeklySeries(state, weeks) {
@@ -1704,6 +1839,8 @@
     variantBreakdown: variantBreakdown,
     orderRevenue: orderRevenue, orderCost: orderCost, orderProfit: orderProfit, orderQty: orderQty,
     createOrder: createOrder,
+    ORDER_STATUSES: ORDER_STATUSES, ORDER_STATUS_FLOW: ORDER_STATUS_FLOW,
+    getOrder: getOrder, updateOrder: updateOrder, setOrderStatus: setOrderStatus,
     totals: totals, weeklySeries: weeklySeries, topSellers: topSellers,
     slowMovers: slowMovers, lowStock: lowStock,
     priceHistory: priceHistory, ordersOfCard: ordersOfCard,

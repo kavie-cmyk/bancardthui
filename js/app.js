@@ -1798,18 +1798,26 @@
     return html;
   }
 
-  var ordFilter = { channel: '', month: '' };
+  var ordFilter = { channel: '', month: '', status: '' };
+  function orderStatusTag(o) {
+    var st = o.status || 'done';
+    return '<span class="tag"' + (st === 'cancelled' ? ' style="color:var(--red,#e58a7a)"' : st !== 'done' ? ' style="border-color:var(--gold-dim);color:var(--gold-soft)"' : '') + '>' + BCT.ORDER_STATUSES[st] + '</span>';
+  }
 
   function vDonHang() {
-    var html = '<h1 class="page-title">Đơn hàng</h1><p class="page-sub">' + S.orders.length + ' đơn · bấm vào từng đơn để xem trừ lô nào</p>';
+    var cancelledCount = S.orders.filter(function (o) { return o.status === 'cancelled'; }).length;
+    var html = '<h1 class="page-title">Đơn hàng</h1><p class="page-sub">' + (S.orders.length - cancelledCount) + ' đơn' + (cancelledCount ? ' · ' + cancelledCount + ' đã hủy' : '') + ' · bấm vào từng đơn để xem chi tiết, sửa đơn và cập nhật trạng thái</p>';
     html += '<div class="toolbar">';
     html += '<select id="o-channel"><option value="">Mọi kênh</option>' + Object.keys(BCT.CHANNELS).map(function (k) {
       return '<option value="' + k + '"' + (ordFilter.channel === k ? ' selected' : '') + '>' + BCT.CHANNELS[k] + '</option>';
     }).join('') + '</select>';
+    html += '<select id="o-status"><option value="">Mọi trạng thái</option>' + Object.keys(BCT.ORDER_STATUSES).map(function (k) {
+      return '<option value="' + k + '"' + (ordFilter.status === k ? ' selected' : '') + '>' + BCT.ORDER_STATUSES[k] + '</option>';
+    }).join('') + '</select>';
     html += '<input type="month" id="o-month" value="' + BCT.esc(ordFilter.month) + '">';
     html += '<a class="btn secondary" href="#/ban" style="text-decoration:none;margin-left:auto">' + IC.plus + ' Tạo đơn mới</a>';
     html += '</div>';
-    html += '<section class="panel" style="padding:6px 22px"><table class="tbl"><thead><tr><th>Ngày</th><th>Kênh</th><th>Người mua</th><th class="r">Số thẻ</th><th class="r">Doanh thu</th><th class="r">Lãi</th><th></th></tr></thead><tbody id="ord-body">' + ordRows() + '</tbody></table></section>';
+    html += '<section class="panel" style="padding:6px 22px"><table class="tbl"><thead><tr><th>Ngày</th><th>Kênh</th><th>Người mua</th><th>Trạng thái</th><th class="r">Số thẻ</th><th class="r">Doanh thu</th><th class="r">Lãi</th><th></th></tr></thead><tbody id="ord-body">' + ordRows() + '</tbody></table></section>';
     return html;
   }
 
@@ -1817,17 +1825,20 @@
     var list = S.orders.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
     if (ordFilter.channel) list = list.filter(function (o) { return o.channel === ordFilter.channel; });
     if (ordFilter.month) list = list.filter(function (o) { return o.date.indexOf(ordFilter.month) === 0; });
-    if (!list.length) return '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px">Chưa có đơn nào khớp bộ lọc.</td></tr>';
-    var tRev = 0, tProf = 0;
+    if (ordFilter.status) list = list.filter(function (o) { return (o.status || 'done') === ordFilter.status; });
+    if (!list.length) return '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:30px">Chưa có đơn nào khớp bộ lọc.</td></tr>';
+    var tRev = 0, tProf = 0, tCount = 0;
     var rows = list.map(function (o) {
+      var cancelled = o.status === 'cancelled';
       var rev = BCT.orderRevenue(o), prof = BCT.orderProfit(o);
-      tRev += rev; tProf += prof;
-      return '<tr><td>' + BCT.fmtDate(o.date) + '</td><td>' + BCT.CHANNELS[o.channel] + '</td><td>' + BCT.esc(o.buyer || '—') + '</td>' +
+      if (!cancelled) { tRev += rev; tProf += prof; tCount++; }
+      return '<tr' + (cancelled ? ' style="opacity:.55"' : '') + '><td>' + BCT.fmtDate(o.date) + '</td><td>' + BCT.CHANNELS[o.channel] + '</td><td>' + BCT.esc(o.buyer || '—') + '</td>' +
+        '<td>' + orderStatusTag(o) + '</td>' +
         '<td class="r">' + BCT.orderQty(o) + '</td><td class="r">' + BCT.fmtVND(rev) + '</td>' +
         '<td class="r ' + (prof >= 0 ? 'pos' : 'neg') + '">' + BCT.fmtVND(prof) + '</td>' +
         '<td class="r"><a class="rowlink" href="#/donhang/' + o.id + '">Chi tiết →</a></td></tr>';
     }).join('');
-    rows += '<tr><td colspan="4" style="font-weight:700;color:var(--muted)">TỔNG (' + list.length + ' đơn)</td><td class="r" style="font-weight:700">' + BCT.fmtVND(tRev) + '</td><td class="r ' + (tProf >= 0 ? 'pos' : 'neg') + '" style="font-weight:700">' + BCT.fmtVND(tProf) + '</td><td></td></tr>';
+    rows += '<tr><td colspan="5" style="font-weight:700;color:var(--muted)">TỔNG (' + tCount + ' đơn, không tính đơn hủy)</td><td class="r" style="font-weight:700">' + BCT.fmtVND(tRev) + '</td><td class="r ' + (tProf >= 0 ? 'pos' : 'neg') + '" style="font-weight:700">' + BCT.fmtVND(tProf) + '</td><td></td></tr>';
     return rows;
   }
 
@@ -1835,10 +1846,15 @@
     var o = null;
     for (var i = 0; i < S.orders.length; i++) if (S.orders[i].id === id) o = S.orders[i];
     if (!o) return '<a class="backlink" href="#/donhang">' + IC.back + ' Đơn hàng</a><div class="empty"><h3>Không tìm thấy đơn</h3></div>';
+    if (orderEditId === id && orderDraft) return orderEditHTML(o);
     var rev = BCT.orderRevenue(o), cost = BCT.orderCost(o), prof = BCT.orderProfit(o);
     var html = '<a class="backlink" href="#/donhang">' + IC.back + ' Đơn hàng</a>';
     html += '<h1 class="page-title">Đơn ' + BCT.fmtDate(o.date) + '</h1>';
     html += '<p class="page-sub">' + BCT.CHANNELS[o.channel] + (o.buyer ? ' · người mua: <b>' + BCT.esc(o.buyer) + '</b>' : '') + (o.note ? ' · ' + BCT.esc(o.note) : '') + '</p>';
+    html += orderStatusPanel(o);
+    if (o.status !== 'cancelled') {
+      html += '<div class="form-actions" style="margin:0 0 14px"><button type="button" class="btn secondary" id="od-edit">Sửa đơn</button></div>';
+    }
     html += '<section class="kpis" style="grid-template-columns:repeat(4,1fr)">';
     html += kpi('Doanh thu', BCT.fmtVND(rev), 'gold', '');
     html += kpi('Vốn (FIFO)', BCT.fmtVND(cost), '', '');
@@ -1856,6 +1872,98 @@
         '<td class="r ' + (lineRev - lineCost >= 0 ? 'pos' : 'neg') + '">' + BCT.fmtVND(lineRev - lineCost) + '</td></tr>';
     });
     html += '</tbody></table></section>';
+    return html;
+  }
+
+  /* ----- trạng thái + sửa đơn bán ngay tại màn hình chi tiết ----- */
+  function orderStatusPanel(o) {
+    var st = o.status || 'done';
+    var html = '<section class="panel" style="margin-bottom:14px"><div class="panel-head"><h2 class="panel-title">Trạng thái đơn</h2>' + orderStatusTag(o) + '</div>';
+    if (st === 'cancelled') {
+      html += '<p class="s" style="margin:0 0 12px">Đơn đã hủy — hàng đã hoàn về kho, đơn không tính vào doanh thu/lãi. Muốn bán lại, đổi trạng thái về “Chờ xác nhận” (hệ thống trừ kho lại nếu còn đủ hàng).</p>';
+    } else {
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px">' +
+        BCT.ORDER_STATUS_FLOW.map(function (s, i) {
+          return (i ? '<span class="s">→</span>' : '') +
+            '<span class="tag"' + (s === st ? ' style="border-color:var(--gold-dim);color:var(--gold-soft)"' : '') + '>' + BCT.ORDER_STATUSES[s] + '</span>';
+        }).join('') + '</div>';
+    }
+    html += '<div class="form-grid">' + fld('Chuyển trạng thái', '<select id="od-status">' +
+      Object.keys(BCT.ORDER_STATUSES).map(function (s) {
+        return '<option value="' + s + '"' + (s === st ? ' selected' : '') + '>' + BCT.ORDER_STATUSES[s] + '</option>';
+      }).join('') + '</select>') + '</div>' +
+      '<div class="form-actions"><button type="button" class="btn" id="od-status-save">Cập nhật trạng thái</button></div></section>';
+    return html;
+  }
+
+  var orderEditId = null;
+  var orderDraft = null;
+  function startOrderEdit(o) {
+    orderEditId = o.id;
+    var lines = [];
+    o.items.forEach(function (it) {
+      var found = null;
+      lines.forEach(function (ln) { if (ln.cardId === it.cardId && ln.sellPrice === it.sellPrice) found = ln; });
+      if (found) found.qty += it.qty;
+      else {
+        var c = BCT.getCard(S, it.cardId);
+        lines.push({ cardId: it.cardId, name: c ? c.name : '?', qty: it.qty, sellPrice: it.sellPrice });
+      }
+    });
+    orderDraft = { date: o.date, channel: o.channel, buyer: o.buyer || '', fees: o.fees || 0, shippingFee: o.shippingFee || 0, note: o.note || '', lines: lines };
+  }
+  function scrapeOrderDraft() {
+    if (!orderDraft) return;
+    var g = function (id) { var el = $(id); return el ? el.value : ''; };
+    orderDraft.date = g('oe-date') || orderDraft.date;
+    orderDraft.channel = g('oe-channel') || orderDraft.channel;
+    orderDraft.buyer = g('oe-buyer'); orderDraft.note = g('oe-note');
+    orderDraft.fees = parseVND(g('oe-fees')); orderDraft.shippingFee = parseVND(g('oe-ship'));
+    Array.prototype.slice.call(document.querySelectorAll('.oe-qty')).forEach(function (inp) {
+      var i = Number(inp.getAttribute('data-i'));
+      if (orderDraft.lines[i]) orderDraft.lines[i].qty = Math.floor(Number(inp.value) || 0);
+    });
+    Array.prototype.slice.call(document.querySelectorAll('.oe-price')).forEach(function (inp) {
+      var i = Number(inp.getAttribute('data-i'));
+      if (orderDraft.lines[i]) orderDraft.lines[i].sellPrice = parseVND(inp.value);
+    });
+  }
+  function orderEditHTML(o) {
+    var d = orderDraft;
+    var own = {};
+    o.items.forEach(function (it) { own[it.cardId] = (own[it.cardId] || 0) + it.qty; });
+    var html = '<a class="backlink" href="#/donhang">' + IC.back + ' Đơn hàng</a>';
+    html += '<h1 class="page-title">Sửa đơn ' + BCT.fmtDate(o.date) + '</h1>';
+    html += '<p class="page-sub">Sửa dòng hàng = hệ thống hoàn kho phần cũ rồi trừ lại theo phần mới. Trạng thái đơn: <b>' + BCT.ORDER_STATUSES[o.status || 'done'] + '</b></p>';
+    html += '<section class="panel"><div class="form-grid">' +
+      fld('Ngày bán', '<input id="oe-date" type="date" value="' + BCT.esc(d.date) + '">') +
+      fld('Kênh bán', '<select id="oe-channel">' + Object.keys(BCT.CHANNELS).map(function (k) {
+        return '<option value="' + k + '"' + (k === d.channel ? ' selected' : '') + '>' + BCT.CHANNELS[k] + '</option>';
+      }).join('') + '</select>') +
+      fld('Người mua', '<input id="oe-buyer" value="' + BCT.esc(d.buyer) + '">') +
+      fld('Phí sàn (đ)', '<input id="oe-fees" inputmode="numeric" value="' + (d.fees ? d.fees : '') + '" placeholder="0">') +
+      fld('Phí ship (đ)', '<input id="oe-ship" inputmode="numeric" value="' + (d.shippingFee ? d.shippingFee : '') + '" placeholder="0">') +
+      fld('Ghi chú', '<input id="oe-note" value="' + BCT.esc(d.note) + '">') +
+      '</div>';
+    html += '<div class="panel-note" style="margin:12px 0 6px">Các lá trong đơn:</div>';
+    html += d.lines.map(function (ln, i) {
+      return '<div class="rowline"><div class="grow"><div class="t">' + BCT.esc(ln.name) + '</div></div>' +
+        '<label class="s">SL <input class="oe-qty" data-i="' + i + '" type="number" min="0" value="' + ln.qty + '" style="width:64px"></label>' +
+        '<label class="s">Giá bán/lá (đ) <input class="oe-price" data-i="' + i + '" inputmode="numeric" value="' + ln.sellPrice + '" style="width:110px"></label>' +
+        '<button type="button" class="btn-ghost" data-oeremove="' + i + '">Bỏ lá này</button></div>';
+    }).join('');
+    html += '<div class="rowline"><div class="grow"><select id="oe-add-card">' +
+      S.cards.map(function (c) {
+        var avail = BCT.stockOf(S, c.id) + (own[c.id] || 0);
+        return '<option value="' + c.id + '"' + (avail <= 0 ? ' disabled' : '') + '>' + BCT.esc(c.name) + ' — ' + BCT.esc(c.set || '') + ' (khả dụng ' + avail + ')</option>';
+      }).join('') +
+      '</select></div>' +
+      '<label class="s">SL <input id="oe-add-qty" type="number" min="1" value="1" style="width:64px"></label>' +
+      '<label class="s">Giá bán/lá (đ) <input id="oe-add-price" inputmode="numeric" placeholder="giá bán" style="width:110px"></label>' +
+      '<button type="button" class="btn-ghost" data-oeadd="1">+ Thêm lá</button></div>';
+    html += '<div class="form-actions" style="margin-top:12px">' +
+      '<button type="button" class="btn" id="oe-save">Lưu thay đổi</button>' +
+      '<button type="button" class="btn-ghost" id="oe-cancel">Hủy sửa</button></div></section>';
     return html;
   }
 
@@ -2176,6 +2284,68 @@
     if (base === 'donhang' && !r.segs[1]) {
       $('o-channel').addEventListener('change', function (e) { ordFilter.channel = e.target.value; $('ord-body').innerHTML = ordRows(); });
       $('o-month').addEventListener('change', function (e) { ordFilter.month = e.target.value; $('ord-body').innerHTML = ordRows(); });
+      var osSel = $('o-status');
+      if (osSel) osSel.addEventListener('change', function (e) { ordFilter.status = e.target.value; $('ord-body').innerHTML = ordRows(); });
+    }
+
+    if (base === 'donhang' && r.segs[1]) {
+      var oid = r.segs[1];
+      var stSave = $('od-status-save');
+      if (stSave) stSave.addEventListener('click', function () {
+        var o = BCT.getOrder(S, oid);
+        if (!o) return;
+        var ns = $('od-status').value;
+        if (ns === o.status) { toast('Đơn đang ở trạng thái này rồi.'); return; }
+        if (ns === 'cancelled' && !window.confirm('Hủy đơn này? Hàng sẽ hoàn về kho và đơn không tính doanh thu nữa.')) return;
+        withLoading(async function () {
+          await BCT.setOrderStatus(S, oid, ns);
+          toast('Đã chuyển trạng thái: ' + BCT.ORDER_STATUSES[ns]);
+          render();
+        }).catch(function (err) { toast(err.message); });
+      });
+      var edBtn = $('od-edit');
+      if (edBtn) edBtn.addEventListener('click', function () {
+        var o = BCT.getOrder(S, oid);
+        if (!o) return;
+        startOrderEdit(o);
+        render();
+      });
+      Array.prototype.slice.call(document.querySelectorAll('[data-oeremove]')).forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          scrapeOrderDraft();
+          orderDraft.lines.splice(Number(btn.getAttribute('data-oeremove')), 1);
+          render();
+        });
+      });
+      var oeAdd = document.querySelector('[data-oeadd]');
+      if (oeAdd) oeAdd.addEventListener('click', function () {
+        scrapeOrderDraft();
+        var sel = $('oe-add-card');
+        if (!sel || !sel.value) return;
+        var c = BCT.getCard(S, sel.value);
+        if (!c) return;
+        orderDraft.lines.push({ cardId: c.id, name: c.name, qty: Math.max(1, Math.floor(Number($('oe-add-qty').value) || 1)), sellPrice: parseVND($('oe-add-price').value) });
+        render();
+      });
+      var oeSave = $('oe-save');
+      if (oeSave) oeSave.addEventListener('click', function () {
+        scrapeOrderDraft();
+        withLoading(async function () {
+          await BCT.updateOrder(S, oid, {
+            date: orderDraft.date, channel: orderDraft.channel, buyer: orderDraft.buyer,
+            fees: orderDraft.fees, shippingFee: orderDraft.shippingFee, note: orderDraft.note,
+            lines: orderDraft.lines
+          });
+          orderEditId = null; orderDraft = null;
+          toast('Đã cập nhật đơn.');
+          render();
+        }).catch(function (err) { toast(err.message); });
+      });
+      var oeCancel = $('oe-cancel');
+      if (oeCancel) oeCancel.addEventListener('click', function () {
+        orderEditId = null; orderDraft = null;
+        render();
+      });
     }
 
     if (base === 'donweb') bindDonWeb();

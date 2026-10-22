@@ -368,6 +368,17 @@
       return '<button type="button" class="chip" data-mycode="' + esc(o.code) + '" data-myphone="' + esc(o.phone) + '">Đơn ' + esc(o.code) + '</button>';
     }).join(' ');
   }
+  // Nếu đơn web đã được shop chuyển thành đơn bán, ưu tiên hiện TIẾN ĐỘ
+  // của đơn bán (xác nhận → đóng gói → vận chuyển → hoàn thành).
+  var TRACK_ORDER_STATUS = {
+    new: '✅ Đã xác nhận', confirmed: '✅ Đã xác nhận',
+    packing: '📦 Đang đóng gói', shipping: '🚚 Đang vận chuyển',
+    done: '🎉 Đã giao thành công', cancelled: '❌ Đơn đã hủy'
+  };
+  function trackStatusLabel(data) {
+    if (data.order_status && TRACK_ORDER_STATUS[data.order_status]) return TRACK_ORDER_STATUS[data.order_status];
+    return TRACK_STATUS[data.status] || data.status;
+  }
   function trackCardHTML(data) {
     var when = data.created_at ? new Date(data.created_at) : null;
     var whenTxt = when ? when.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
@@ -377,7 +388,7 @@
         '<div class="cl-total">' + fmtVND((Number(it.price) || 0) * (Number(it.qty) || 0)) + '</div></div>';
     }).join('');
     return '<div class="track-card">' +
-      '<div class="track-status">' + (TRACK_STATUS[data.status] || data.status) + '</div>' +
+      '<div class="track-status">' + trackStatusLabel(data) + '</div>' +
       '<div class="cl-sub">Đơn ' + esc(String(data.code || '').toUpperCase()) + ' · ' + esc(data.customer_name || '') + (whenTxt ? ' · đặt lúc ' + whenTxt : '') + '</div>' +
       lines +
       '<div class="cart-sumrow"><span>Tiền hàng</span><span>' + fmtVND(data.total) + '</span></div>' +
