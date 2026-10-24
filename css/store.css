@@ -8,7 +8,12 @@
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 105px; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+body { position: relative; isolation: isolate; margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+/* Two faint collector-themed illustrations at the edges; no repeating wallpaper. */
+.shop-backdrop { position: fixed; inset: 0; pointer-events: none; z-index: -1; overflow: hidden; mask-image: linear-gradient(90deg, #000, transparent 190px, transparent calc(100% - 190px), #000); }
+.shop-backdrop::before, .shop-backdrop::after { content: ''; position: absolute; width: 180px; height: 370px; background: url('../assets/store/collectors-motif.svg') center / contain no-repeat; opacity: .18; }
+.shop-backdrop::before { left: -55px; top: 125px; transform: rotate(-8deg); }
+.shop-backdrop::after { right: -52px; bottom: 35px; transform: rotate(11deg) scaleX(-1); }
 [hidden] { display: none !important; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
@@ -58,9 +63,8 @@ h1 { font-family: var(--font-game); font-size: clamp(46px, 4.5vw, 66px); font-we
 .window-bar > img { margin-left: auto; }
 .window-dots { display: flex; gap: 3px; }
 .window-dots i { width: 4px; height: 4px; background: #a5c1bd; }
-.hero-scene { position: relative; height: 185px; background: #b1d2bb url('../assets/hoenn/coast.webp') center 46% / cover; image-rendering: pixelated; border: 1px solid #869e8a; margin-top: 4px; overflow: hidden; }
-.hero-mudkip { position: absolute; bottom: 1px; right: 22px; }
-.hero-torchic { position: absolute; bottom: 5px; left: 18px; }
+.hero-scene { position: relative; height: 210px; background: #e7d6b8; border: 1px solid #a99a7e; margin-top: 4px; overflow: hidden; }
+.hero-art { display: block; width: 100%; height: 100%; object-fit: cover !important; object-position: center 48%; image-rendering: pixelated; }
 .window-caption { display: flex; align-items: center; gap: 10px; font-family: var(--font-game); font-size: 21px; background: #fff9e4; padding: 9px 12px 6px; }
 .dialog-arrow { font-size: 13px; color: var(--rs-ruby); }
 
@@ -211,8 +215,6 @@ h2 { font-family: var(--font-game); font-size: 34px; line-height: 1.1; font-weig
   .hero-scene { height: 160px; }
   .window-bar { font-size: 12px; gap: 6px; }
   .window-caption { font-size: 16px; gap: 6px; padding: 8px; }
-  .hero-mudkip { width: 60px; height: 60px; right: 6px; }
-  .hero-torchic { width: 48px; height: 48px; left: 6px; }
   .hero-link { padding: 9px 12px; font-size: 10px; gap: 18px; }
   .catalog { padding-top: 26px; padding-bottom: 30px; }
   .shop-tools { gap: 10px; padding: 10px; }
@@ -243,11 +245,12 @@ h2 { font-family: var(--font-game); font-size: 34px; line-height: 1.1; font-weig
   .hero-description br { display: none; }
   .hero-link { font-size: 10px; padding: 9px 10px; gap: 16px; }
   .hero-window { width: 112px; margin: 0; padding: 3px; }
-  .hero-scene { height: 145px; background-position: 73% 50%; }
+  .hero-scene { height: 145px; }
+  .hero-art { object-position: 49% center; }
   .window-bar { font-size: 12px; justify-content: center; padding: 7px 3px; }
   .window-dots, .window-bar > img, .window-caption { display: none; }
-  .hero-mudkip { width: 56px; height: 56px; right: 2px; }
-  .hero-torchic { display: none; }
+  .shop-backdrop::before { left: -126px; top: 80px; opacity: .12; }
+  .shop-backdrop::after { right: -125px; bottom: 15px; opacity: .12; }
   .section-heading { margin-bottom: 14px; gap: 8px; }
   h2 { font-size: 31px; }
   .section-heading .eyebrow { font-size: 8px; letter-spacing: 1.1px; }
