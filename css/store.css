@@ -259,10 +259,10 @@ h2 { font-family: var(--font-game); font-size: 34px; line-height: 1.1; font-weig
   .tile-body { padding: 11px 9px; gap: 6px; }
   .tile-name { font-size: 12px; }
   .tile-set { font-size: 10px; }
-  .badge { font-size: 9px; padding: 2px 4px; }
+  .badge { font-size: 10px; padding: 2px 4px; }
   .tile-price { font-size: 16px; }
   .tile-qty { font-size: 9px; }
-  .buy-btn { font-size: 10px; }
+  .buy-btn { font-size: 11px; }
   .track-box { padding: 18px; }
   .track-heading h2 { font-size: 28px; }
   .track-form { grid-template-columns: 1fr; gap: 7px; }

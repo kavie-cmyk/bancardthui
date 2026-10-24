@@ -6,7 +6,7 @@
 (async function () {
   var query = new URLSearchParams(location.search);
   if (query.has('mobile')) document.body.classList.add('mobile');
-  var html = await (await fetch('../store.html')).text();
+  var html = await (await fetch('../store.html', {cache:'no-store'})).text();
   var base = new URL('../', location.href).href;
   html = html.replace('<head>', '<head><base href="' + base + '">');
   html = html.replace(/<script src="js\/config\.js[^\"]*"><\/script>/,
