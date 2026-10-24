@@ -1,6 +1,12 @@
 /* Only loaded by tests/storefront-ui.html. No production database or order writes. */
 (function () {
   'use strict';
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('a[href^="#"]');
+    if (!link) return;
+    var target = document.getElementById(link.getAttribute('href').slice(1));
+    if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+  });
   var memory = {};
   Object.defineProperty(window, 'localStorage', { value: {
     getItem: function (key) { return memory[key] || null; },
