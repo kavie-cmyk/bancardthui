@@ -1,4 +1,4 @@
-/* Public shop: a softened Hoenn world behind opaque, readable cream windows. */
+/* Public shop: a dedicated card-shopping town behind clear cream windows. */
 :root {
   --bg: #f4f1e7; --panel: #fffdf5; --panel2: #efecdf;
   --ink: #20394d; --muted: #5d6b70; --line: #cfcdc0; --line-soft: #e2dfd2;
@@ -9,10 +9,10 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 105px; }
 body { position: relative; isolation: isolate; margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
-/* Reuse the inventory world, soften its colors, and keep it behind solid panels. */
+/* Exclusive shop artwork; quiet courtyard center and scenery at the edges. */
 .shop-backdrop { position: fixed; inset: 0; pointer-events: none; z-index: -1;
-  background: linear-gradient(#f4f1e761, #f4f1e761), #d8dfbf url('../assets/hoenn/coast.webp') center / cover no-repeat;
-  filter: saturate(.72); image-rendering: pixelated;
+  background: linear-gradient(#f4f1e747, #f4f1e747), #e8d7bb url('../assets/store/card-town-bg.webp') center / cover no-repeat;
+  filter: saturate(.84); image-rendering: pixelated;
 }
 [hidden] { display: none !important; }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -249,7 +249,7 @@ h2 { font-family: var(--font-game); font-size: 34px; line-height: 1.1; font-weig
   .hero-art { object-position: 49% center; }
   .window-bar { font-size: 12px; justify-content: center; padding: 7px 3px; }
   .window-dots, .window-bar > img, .window-caption { display: none; }
-  .shop-backdrop { background-position: 73% center; }
+  .shop-backdrop { background-position: 88% center; }
   .section-heading { margin-bottom: 14px; gap: 8px; }
   h2 { font-size: 31px; }
   .section-heading .eyebrow { font-size: 8px; letter-spacing: 1.1px; }
