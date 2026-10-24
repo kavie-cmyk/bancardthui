@@ -1,7 +1,8 @@
 # Storefront illustration
 
 - `card-shop.webp`: created for Bán Card Thui using the built-in ImageGen tool on 2026-10-24, then encoded to WebP. No cropping or repainting. Used only as decorative shop artwork, never as a photo of inventory.
-- `collectors-motif.svg`: native SVG decoration drawn for this site. Two low-opacity clusters at the page edges, with card backs and a pixel-style Poké Ball. The mobile version keeps them mostly outside the content area.
+- Store background: reuses `../hoenn/coast.webp` from the inventory UI, with a cream overlay and reduced saturation. The hero, catalog, purchase guide, lookup and footer use opaque cream panels so the scenery never sits behind reading text.
+- `collectors-motif.svg`: earlier, unused edge-motif experiment retained as an asset; the live storefront now uses the Hoenn scene.
 
 ## ImageGen prompt
 
