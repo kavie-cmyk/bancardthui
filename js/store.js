@@ -312,20 +312,42 @@
     return { cards: [], lots: [], orders: [], setTotals: {}, customSets: [], listings: [], storeOrders: [] };
   }
 
+  // Nạp TOÀN BỘ một bảng theo từng trang 1.000 dòng: Supabase mặc định cắt
+  // ở 1.000 dòng mỗi lần truy vấn — kho lớn mà không phân trang là dữ liệu
+  // bị mất âm thầm (tồn kho sai mà không báo lỗi). Gắn thêm khóa phụ duy
+  // nhất vào thứ tự sắp xếp để lật trang không trùng/sót dòng.
+  var PAGE_SIZE = 1000;
+  async function qAll(table, opts, tiebreak) {
+    opts = opts || {};
+    var order = (opts.order ? opts.order + ',' : '') + (tiebreak || 'id.asc');
+    var all = [];
+    var offset = 0;
+    for (;;) {
+      var o = {};
+      Object.keys(opts).forEach(function (k) { o[k] = opts[k]; });
+      o.order = order; o.limit = PAGE_SIZE; o.offset = offset;
+      var page = await SB.q(table, o);
+      all = all.concat(page);
+      if (page.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+    return all;
+  }
+
   async function load() {
-    var cards = await SB.q('cards', { order: 'created_at.asc' });
-    var lots = await SB.q('inventory_lots', { order: 'import_date.asc,created_at.asc' });
-    var orders = await SB.q('orders', { order: 'date.asc,created_at.asc' });
-    var images = await SB.q('card_images', { order: 'sort_order.asc' });
-    var csets = await SB.q('custom_sets', { order: 'created_at.asc' });
-    var totals = await SB.q('set_totals', {});
+    var cards = await qAll('cards', { order: 'created_at.asc' });
+    var lots = await qAll('inventory_lots', { order: 'import_date.asc,created_at.asc' });
+    var orders = await qAll('orders', { order: 'date.asc,created_at.asc' });
+    var images = await qAll('card_images', { order: 'sort_order.asc' });
+    var csets = await qAll('custom_sets', { order: 'created_at.asc' });
+    var totals = await qAll('set_totals', {}, 'set_key.asc');
     // Bảng listings thuộc Phase 2 — DB cũ có thể chưa tạo bảng này.
     // Lỗi ở đây KHÔNG được làm sập toàn bộ app: thiếu bảng thì coi như chưa có rao bán.
     var listings = [];
-    try { listings = await SB.q('listings', { order: 'created_at.asc' }); } catch (e) { listings = []; }
+    try { listings = await qAll('listings', { order: 'created_at.asc' }); } catch (e) { listings = []; }
     // Đơn đặt từ storefront (bảng store_orders) — DB chưa chạy SQL thì coi như rỗng.
     var storeOrders = [];
-    try { storeOrders = await SB.q('store_orders', { order: 'created_at.desc' }); } catch (e) { storeOrders = []; }
+    try { storeOrders = await qAll('store_orders', { order: 'created_at.desc' }); } catch (e) { storeOrders = []; }
 
     var imgByCard = {};
     images.forEach(function (r) {

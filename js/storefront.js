@@ -275,15 +275,27 @@
   }
 
   async function fetchRows(silent) {
-    var url = window.SUPABASE_URL + '/rest/v1/storefront_listings?select=*&order=created_at.desc&limit=500';
-    var res = await fetch(url, {
-      headers: {
-        'apikey': window.SUPABASE_ANON_KEY,
-        'Authorization': 'Bearer ' + window.SUPABASE_ANON_KEY
-      }
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    rows = await res.json();
+    // Nạp theo từng trang 1.000 tin cho tới hết (trước đây cứng limit=500 —
+    // rao hơn 500 lá là phần sau không hiện cho khách). Thêm listing_id làm
+    // khóa phụ để lật trang ổn định.
+    var PAGE = 1000;
+    var all = [];
+    var offset = 0;
+    for (;;) {
+      var url = window.SUPABASE_URL + '/rest/v1/storefront_listings?select=*&order=created_at.desc,listing_id.asc&limit=' + PAGE + '&offset=' + offset;
+      var res = await fetch(url, {
+        headers: {
+          'apikey': window.SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + window.SUPABASE_ANON_KEY
+        }
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var page = await res.json();
+      all = all.concat(page);
+      if (page.length < PAGE) break;
+      offset += PAGE;
+    }
+    rows = all;
     rowById = {};
     rows.forEach(function (r) { rowById[r.listing_id] = r; });
     pruneCart();
