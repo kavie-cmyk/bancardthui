@@ -10,63 +10,104 @@
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/store.css?v=20261021-sf8">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/store.css?v=20261024-shop1">
 </head>
 <body>
-<header class="shop-head">
+<a class="skip-link" href="#cards">Đến danh sách thẻ</a>
+<header class="shop-head" id="top">
   <div class="shop-head-in">
-    <img class="shop-mascot" src="assets/store/mascot.webp" alt="Bán Card Thui">
-    <div class="shop-brand">
-      <div class="shop-name">Bán Card <em>Thui</em></div>
-      <div class="shop-tag">Pokémon TCG singles — hàng có sẵn, giá rõ ràng</div>
-    </div>
+    <a class="shop-brand" href="store.html" aria-label="Bán Card Thui — Trang chủ">
+      <span class="brand-mark"><img src="assets/hoenn/poke-ball.png" alt="" width="32" height="32"></span>
+      <span><span class="shop-name">Bán Card <em>Thui</em></span><span class="shop-tag">Tiệm thẻ Pokémon của Bự</span></span>
+    </a>
+    <nav class="shop-nav" aria-label="Điều hướng cửa hàng">
+      <a href="#cards">Thẻ đang bán</a>
+      <a href="#tracking">Tra cứu đơn</a>
+    </nav>
     <div class="shop-contact" id="shop-contact"></div>
+    <button class="header-cart" id="cart-open" type="button" aria-label="Mở giỏ hàng" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 8h14l1 13H4L5 8Z"/><path d="M8 9V6a4 4 0 0 1 8 0v3"/></svg>
+      <span>Giỏ hàng</span><span id="cart-count">0</span>
+    </button>
   </div>
 </header>
 
 <main class="shop-wrap">
-  <div class="shop-tools">
-    <input id="q" type="search" placeholder="Tìm lá bài, tên set…" autocomplete="off">
-    <div class="chips" id="lang-chips">
-      <button class="chip on" data-lang="all">Tất cả</button>
-      <button class="chip" data-lang="en">Bản Anh</button>
-      <button class="chip" data-lang="jp">Bản Nhật</button>
+  <section class="shop-hero" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow"><span></span> POKÉMON TCG · SINGLE CARDS</p>
+      <h1 id="hero-title">Thẻ Pokémon,<br>chọn <em>từng lá.</em></h1>
+      <p class="hero-description">Tìm lá tiếp theo cho bộ sưu tập của bạn.<br>Xem ảnh, tình trạng và giá bán ngay tại tiệm.</p>
+      <a class="hero-link" href="#cards">Xem thẻ đang bán <span aria-hidden="true">↓</span></a>
     </div>
-    <select id="sort" aria-label="Sắp xếp">
-      <option value="new">Mới đăng trước</option>
-      <option value="asc">Giá thấp → cao</option>
-      <option value="desc">Giá cao → thấp</option>
-    </select>
-  </div>
-
-  <div id="state" class="shop-state">Đang tải hàng…</div>
-  <div id="grid" class="shop-grid"></div>
-
-  <section class="track-box">
-    <h2>Tra cứu đơn đã đặt</h2>
-    <p class="track-hint">Chỉ cần nhập <b>mã đơn</b> (shop cấp khi bạn đặt hàng xong) <b>hoặc số điện thoại</b> đã dùng để đặt — trạng thái đơn cập nhật ngay khi shop xác nhận hoặc chỉnh sửa đơn. Tra bằng số điện thoại sẽ hiện tất cả đơn của số đó.</p>
-    <div id="my-orders" class="my-orders"></div>
-    <div class="track-form">
-      <input id="track-code" type="text" placeholder="Mã đơn (vd A1B2C3D4)" autocomplete="off" style="text-transform:uppercase">
-      <input id="track-phone" type="tel" placeholder="Số điện thoại đã đặt" autocomplete="tel">
-      <button id="track-btn" type="button">Tra cứu</button>
+    <div class="hero-window" aria-hidden="true">
+      <div class="window-bar"><span class="window-dots"><i></i><i></i><i></i></span><span>MỘT GÓC HOENN</span><img src="assets/hoenn/poke-ball.png" alt="" width="16" height="16"></div>
+      <div class="hero-scene"><img class="hero-mudkip" src="assets/hoenn/mudkip.png" alt="" width="80" height="80"><img class="hero-torchic" src="assets/hoenn/torchic.png" alt="" width="64" height="64"></div>
+      <div class="window-caption"><span class="dialog-arrow">▶</span> Chào mừng bạn ghé tiệm!</div>
     </div>
-    <div id="track-result"></div>
   </section>
 
+  <section class="catalog" id="cards" aria-labelledby="catalog-title">
+    <div class="section-heading">
+      <div><p class="eyebrow">KỆ THẺ CỦA TIỆM</p><h2 id="catalog-title">Thẻ đang bán</h2></div>
+      <span class="catalog-count" id="catalog-count">Đang cập nhật…</span>
+    </div>
+    <div class="shop-tools">
+      <div class="search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="q" aria-label="Tìm thẻ theo tên hoặc set" type="search" placeholder="Tìm tên lá bài, tên set…" autocomplete="off"></div>
+      <div class="chips" id="lang-chips" role="group" aria-label="Ngôn ngữ thẻ">
+        <button class="chip on" data-lang="all" aria-pressed="true">Tất cả</button>
+        <button class="chip" data-lang="en" aria-pressed="false">Bản Anh</button>
+        <button class="chip" data-lang="jp" aria-pressed="false">Bản Nhật</button>
+      </div>
+      <select id="sort" aria-label="Sắp xếp">
+        <option value="new">Mới đăng trước</option>
+        <option value="asc">Giá thấp → cao</option>
+        <option value="desc">Giá cao → thấp</option>
+      </select>
+    </div>
+    <div id="state" class="shop-state" role="status" aria-live="polite">Đang tải hàng…</div>
+    <div id="grid" class="shop-grid"></div>
+  </section>
+
+  <div class="shop-help">
+    <section class="how-to" aria-labelledby="how-title">
+      <p class="eyebrow">MUA THẺ TẠI TIỆM</p><h2 id="how-title">Chọn lá. Gửi giỏ. Chờ shop gọi.</h2>
+      <ol class="buy-steps">
+        <li><span class="step-number">01</span><div><h3>Chọn những lá bạn thích</h3><p>Kiểm tra tình trạng, phiên bản và thêm vào giỏ.</p></div></li>
+        <li><span class="step-number">02</span><div><h3>Gửi đơn đặt hàng</h3><p>Điền thông tin nhận hàng trong giỏ. Giữ mã đơn để tra cứu.</p></div></li>
+        <li><span class="step-number">03</span><div><h3>Shop liên hệ xác nhận</h3><p>Shop gọi/Zalo xác nhận còn hàng và báo phí ship trước khi giao.</p></div></li>
+      </ol>
+      <p class="payment-note"><img src="assets/hoenn/amulet-coin.png" alt="" width="28" height="28">Thanh toán COD hoặc chuyển khoản.</p>
+    </section>
+    <section class="track-box" id="tracking" aria-labelledby="track-title">
+      <div class="track-heading"><img src="assets/hoenn/harbor-mail.png" alt="" width="40" height="40"><div><p class="eyebrow">ĐƠN HÀNG CỦA BẠN</p><h2 id="track-title">Thẻ đang đến đâu?</h2></div></div>
+      <p class="track-hint">Nhập mã đơn <b>hoặc</b> số điện thoại đã đặt hàng để xem trạng thái mới nhất.</p>
+      <div id="my-orders" class="my-orders"></div>
+      <div class="track-form">
+        <label for="track-code">Mã đơn<input id="track-code" type="text" placeholder="VD: A1B2C3D4" autocomplete="off" autocapitalize="characters"></label>
+        <span class="track-or">hoặc</span>
+        <label for="track-phone">Số điện thoại<input id="track-phone" type="tel" placeholder="Số điện thoại đã đặt" autocomplete="tel"></label>
+        <button id="track-btn" type="button">Tra cứu đơn <span aria-hidden="true">→</span></button>
+      </div>
+      <div id="track-result" aria-live="polite"></div>
+      <p class="track-footnote">Tra bằng số điện thoại để xem tất cả đơn của số đó.</p>
+    </section>
+  </div>
+
   <footer class="shop-foot">
-    <p><b>Cách mua:</b> chọn lá → "Thêm vào giỏ" → mở giỏ và gửi đơn. Shop sẽ gọi/Zalo xác nhận còn hàng, báo phí ship rồi mới giao — thanh toán COD hoặc chuyển khoản khi nhận hàng. Cần tư vấn nhanh thì nhắn Messenger/Zalo cho shop.</p>
-    <p class="dim">Trang này chỉ hiển thị các lá đang bán. Giá và số lượng cập nhật theo kho thực tế của shop.</p>
+    <div><span class="footer-brand">Bán Card <em>Thui</em></span><p>Pokémon TCG singles · Tiệm thẻ của Bự</p></div>
+    <p class="foot-stock">Chỉ hiển thị các lá đang bán.<br>Giá và số lượng cập nhật theo kho của shop.</p>
+    <a href="#top">Về đầu trang <span aria-hidden="true">↑</span></a>
   </footer>
 </main>
 
 <button id="cart-fab" type="button" hidden><span id="cart-fab-txt">Giỏ hàng</span></button>
 
 <div id="cart-drawer" hidden>
-  <div class="cart-panel">
+  <div class="cart-panel" role="dialog" aria-modal="true" aria-labelledby="cart-title" tabindex="-1">
     <div class="cart-head">
-      <b>Giỏ hàng &amp; đặt mua</b>
+      <b id="cart-title">Giỏ hàng của bạn</b>
       <button id="cart-close" type="button" aria-label="Đóng giỏ hàng">×</button>
     </div>
     <div id="cart-main">
@@ -97,8 +138,8 @@
   </div>
 </div>
 
-<script src="js/config.js?v=20261021-sf8"></script>
-<script src="js/sets-db.js?v=20261021-sf8"></script>
-<script src="js/storefront.js?v=20261021-sf8"></script>
+<script src="js/config.js?v=20261024-shop1"></script>
+<script src="js/sets-db.js?v=20261024-shop1"></script>
+<script src="js/storefront.js?v=20261024-shop1"></script>
 </body>
 </html>

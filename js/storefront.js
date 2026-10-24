@@ -128,7 +128,7 @@
     return '<article class="tile">' +
       '<div class="tile-img">' + imgTag(r) + '</div>' +
       '<div class="tile-body">' +
-        '<div class="tile-name">' + esc(r.name) + '</div>' +
+        '<h3 class="tile-name">' + esc(r.name) + '</h3>' +
         '<div class="tile-set">' + esc(r.set_name || '') + (r.number ? ' · #' + esc(r.number) : '') + '</div>' +
         (badges ? '<div class="badges">' + badges + '</div>' : '') +
         '<div class="tile-meta"><span class="tile-price">' + fmtVND(r.price) + '</span>' +
@@ -149,14 +149,22 @@
     else if (sort === 'desc') list.sort(function (a, b) { return b.price - a.price; });
     else list.sort(function (a, b) { return String(b.created_at || '') < String(a.created_at || '') ? -1 : 1; });
 
+    var count = document.getElementById('catalog-count');
+    if (count) count.textContent = rows.length ? rows.length + ' lá đang bán' : 'Đang bổ sung thẻ';
+    stateEl.classList.remove('err');
+    stateEl.classList.toggle('is-empty', !list.length);
     if (!rows.length) {
-      stateEl.textContent = 'Shop đang cập nhật hàng mới — bạn quay lại sau ít hôm nhé!';
+      stateEl.innerHTML = '<img class="empty-icon" src="assets/hoenn/pokeblock-case.png" alt="" width="48" height="48">' +
+        '<h3>Shop đang cập nhật thẻ mới</h3><p>Bạn ghé lại sau nhé.</p>';
       gridEl.innerHTML = '';
       return;
     }
-    stateEl.textContent = list.length
-      ? 'Đang có ' + list.length + ' lá đang bán'
-      : 'Không tìm thấy lá nào khớp — thử từ khóa khác nhé.';
+    if (!list.length) {
+      stateEl.innerHTML = '<img class="empty-icon" src="assets/hoenn/town-map.png" alt="" width="48" height="48">' +
+        '<h3>Chưa tìm thấy lá phù hợp</h3><p>Thử đổi từ khóa hoặc chọn ngôn ngữ khác nhé.</p>';
+    } else {
+      stateEl.textContent = 'Hiển thị ' + list.length + ' / ' + rows.length + ' lá';
+    }
     gridEl.innerHTML = list.map(tileHTML).join('');
   }
 
@@ -167,6 +175,8 @@
   function renderCartUI() {
     var n = cartCount();
     fab.hidden = n === 0;
+    document.getElementById('cart-count').textContent = n;
+    document.getElementById('cart-open').setAttribute('aria-label', 'Mở giỏ hàng, ' + n + ' lá');
     document.getElementById('cart-fab-txt').textContent = 'Giỏ hàng · ' + n + ' lá · ' + fmtVND(cartTotal());
     var box = document.getElementById('cart-items');
     var keys = Object.keys(cart);
@@ -190,8 +200,26 @@
     document.getElementById('co-submit').disabled = !keys.length;
   }
 
-  function openCart() { drawer.hidden = false; document.body.style.overflow = 'hidden'; }
-  function closeCart() { drawer.hidden = true; document.body.style.overflow = ''; }
+  var cartReturnFocus = null;
+  function openCart() {
+    cartReturnFocus = document.activeElement;
+    drawer.hidden = false; document.body.style.overflow = 'hidden';
+    document.getElementById('cart-close').focus();
+  }
+  function closeCart() {
+    drawer.hidden = true; document.body.style.overflow = '';
+    if (cartReturnFocus && cartReturnFocus.isConnected && !cartReturnFocus.hidden) cartReturnFocus.focus();
+    else document.getElementById('cart-open').focus();
+  }
+  drawer.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeCart(); return; }
+    if (e.key !== 'Tab') return;
+    var focusable = Array.prototype.filter.call(drawer.querySelectorAll('button:not(:disabled), input:not([tabindex="-1"]), textarea, [href]'), function (el) { return el.getClientRects().length; });
+    if (!focusable.length) return;
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
 
   function validPhone(raw) {
     var d = String(raw || '').replace(/\D/g, '');
@@ -317,6 +345,8 @@
     catch (e) {
       stateEl.textContent = 'Chưa tải được danh sách hàng — bạn thử tải lại trang sau ít phút nhé.';
       stateEl.classList.add('err');
+      var count = document.getElementById('catalog-count');
+      if (count) count.textContent = 'Chưa tải được thẻ';
     }
   }
 
@@ -328,6 +358,7 @@
     langFilter = btn.getAttribute('data-lang');
     Array.prototype.forEach.call(this.querySelectorAll('.chip'), function (c) {
       c.classList.toggle('on', c === btn);
+      c.setAttribute('aria-pressed', c === btn ? 'true' : 'false');
     });
     renderGrid();
   });
@@ -345,6 +376,8 @@
   });
 
   fab.addEventListener('click', openCart);
+  document.getElementById('cart-open').addEventListener('click', openCart);
+  renderCartUI();
   document.getElementById('cart-close').addEventListener('click', closeCart);
   drawer.addEventListener('click', function (e) { if (e.target === drawer) closeCart(); });
   document.getElementById('co-form').addEventListener('submit', submitOrder);

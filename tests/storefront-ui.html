@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Storefront UI fixture — isolated sample listings</title>
+<style>html,body{margin:0;min-height:100%;background:#d8dcd3}iframe{display:block;border:0;width:100%;height:100vh;margin:auto}body.mobile iframe{width:390px;max-width:100%;height:844px}</style></head><body>
+<iframe id="preview" title="Storefront — dữ liệu thử, không kết nối kho thật"></iframe>
+<script>
+(async function () {
+  var query = new URLSearchParams(location.search);
+  if (query.has('mobile')) document.body.classList.add('mobile');
+  var html = await (await fetch('../store.html')).text();
+  var base = new URL('../', location.href).href;
+  html = html.replace('<head>', '<head><base href="' + base + '">');
+  html = html.replace(/<script src="js\/config\.js[^\"]*"><\/script>/,
+    '<script>window.STOREFRONT_FIXTURE_MODE="' + (query.has('empty') ? 'empty' : query.has('error') ? 'error' : 'stocked') + '";<\/script><script src="tests/storefront-fixture.js"><\/script>');
+  document.getElementById('preview').srcdoc = html;
+})();
+</script></body></html>
