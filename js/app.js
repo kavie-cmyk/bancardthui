@@ -1487,7 +1487,7 @@
       if (!window.BCTMatch || typeof window.BCTMatch.buildIndex !== 'function') { resolve(null); return; }
       if (typeof document === 'undefined' || !document.createElement) { resolve(null); return; }
       var sc = document.createElement('script');
-      sc.src = 'js/cards-dict.js?v=20261030-ocr1';
+      sc.src = 'js/cards-dict.js?v=20261030-ocr2';
       sc.async = true;
       sc.onload = build;
       sc.onerror = function () { resolve(null); };
@@ -1604,7 +1604,14 @@
     var fb = document.getElementById('scan-ocr-fallback');
     if (fb) fb.addEventListener('click', function () {
       var g = document.getElementById('scan-go');
-      if (!g) { toast('Chưa có nút CardSight trên trang.'); return; }
+      if (!g) {
+        // Không có key CardSight đang dùng nên không có nút quét CardSight:
+        // hướng dẫn thêm key thay vì báo lỗi — OCR vẫn dùng bình thường.
+        toast('Chưa có key CardSight đang dùng — dán/thêm key ở mục "API key CardSight" phía trên để dùng cách quét dự phòng này.');
+        var keyInput = document.getElementById('cs-key');
+        if (keyInput && keyInput.scrollIntoView) keyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
       if (g.scrollIntoView) g.scrollIntoView({ behavior: 'smooth', block: 'center' });
       g.click();
     });
@@ -1617,13 +1624,13 @@
       (numberText ? ' · số: <b>' + BCT.esc(numberText) + '</b>' : '') + '</div>';
     if (!scanOcrCandidates.length) {
       box.innerHTML = head +
-        '<div class="scan-meta warn">Chưa khớp được lá nào trong từ điển. Thử ảnh rõ hơn / đúng chiều, hoặc quét bằng CardSight.</div>' +
+        '<div class="scan-meta warn">Chưa khớp được lá nào trong từ điển. Thử ảnh rõ hơn / đúng chiều.</div>' +
         ocrFallbackHTML();
       bindOcrResultButtons();
       return;
     }
     box.innerHTML = head +
-      '<div class="scan-meta">Chạm vào lá đúng để sang màn xác nhận như quét CardSight:</div>' +
+      '<div class="scan-meta">Chạm vào lá đúng để sang màn xác nhận:</div>' +
       '<div style="display:grid;gap:8px;margin-top:8px">' +
       scanOcrCandidates.map(function (cand, i) {
         var pct = ocrScorePct(cand);
@@ -1676,8 +1683,8 @@
       ocrSetStatus('Đang tra từ điển lá bài…');
       var index = await ensureDict();
       if (!index || !window.BCTMatch || typeof window.BCTMatch.searchDict !== 'function') {
-        ocrSetStatus('Chưa nạp được từ điển lá bài — kiểm tra mạng rồi thử lại, hoặc quét bằng CardSight.');
-        toast('Chưa nạp được từ điển lá bài. Vẫn có thể quét bằng CardSight (1 lượt).');
+        ocrSetStatus('Chưa nạp được từ điển lá bài — kiểm tra mạng rồi thử lại.');
+        toast('Chưa nạp được từ điển lá bài.');
         var box0 = document.getElementById('scan-result');
         if (box0) { box0.innerHTML = ocrFallbackHTML(); bindOcrResultButtons(); }
         return;
@@ -1686,10 +1693,10 @@
       candidates = Array.isArray(candidates) ? candidates.slice(0, 6) : [];
       renderOcrCandidates(candidates, nameText, numberText);
       ocrSetStatus(candidates.length ? 'Đã tìm thấy ' + candidates.length + ' ứng viên — chạm vào lá đúng.' : 'Không khớp lá nào trong từ điển.');
-      if (!candidates.length) toast('OCR chưa khớp được lá nào — có thể quét bằng CardSight.');
+      if (!candidates.length) toast('OCR chưa khớp được lá nào.');
     } catch (e) {
       ocrSetStatus('OCR lỗi: ' + (e.message || e));
-      toast((e.message || 'OCR thất bại.') + ' Vẫn có thể quét bằng CardSight (1 lượt).');
+      toast(e.message || 'OCR thất bại.');
     } finally {
       if (btn) btn.disabled = !scanState.photo;
     }
@@ -1699,7 +1706,7 @@
     var tokens = BCT.getCardSightKeys();
     var active = BCT.getCardSightKey();
     var html = '<h1 class="page-title">Quét thẻ bằng ảnh</h1>' +
-      '<p class="page-sub">Chụp hoặc tải ảnh 1 lá → AI (CardSight) nhận diện tên, set, số thứ tự → bạn kiểm tra lại rồi lưu vào kho kèm lô nhập. Mỗi lần nhận diện tính 1 lượt trong tài khoản CardSight (gói free có 750 lượt/tháng, tự làm mới đầu tháng).</p>';
+      '<p class="page-sub">Chụp hoặc tải ảnh 1 lá → nhận diện tên, set, số thứ tự → bạn kiểm tra lại rồi lưu vào kho kèm lô nhập. Quét OCR (miễn phí, thử nghiệm) chạy ngay trên máy, không cần key. CardSight là cách quét dự phòng bằng AI: mỗi lần nhận diện tính 1 lượt trong tài khoản CardSight (gói free có 750 lượt/tháng, tự làm mới đầu tháng).</p>';
     html += '<section class="panel"><h3 style="margin-top:0">API key CardSight' + (tokens.length ? ' (' + tokens.length + ' key)' : '') + '</h3>';
     if (tokens.length) {
       html += '<div class="cs-list">' + tokens.map(function (t, i) {
@@ -1715,14 +1722,17 @@
       '<div class="field"><label>API key</label><input type="password" id="cs-key" placeholder="Dán API key" autocomplete="off"></div></div>' +
       '<div class="form-actions"><button type="button" class="btn" id="cs-save">' + (tokens.length ? 'Thêm key' : 'Lưu key') + '</button></div>' +
       '<p class="panel-note">Có thể lưu nhiều key (nhiều tài khoản) và chuyển qua lại. Key chỉ lưu trong trình duyệt này — không đưa lên GitHub, không ai khác thấy được. Đổi máy hoặc đổi trình duyệt sẽ phải dán lại.</p></section>';
-    if (!active) return html;
+    // Khu chọn ảnh + OCR luôn hiện, không phụ thuộc key CardSight: OCR chạy
+    // độc lập trên máy. Chỉ riêng nút quét CardSight mới cần key đang dùng.
     html += '<section class="panel"><h3 style="margin-top:0">Chọn ảnh lá bài</h3>' +
       '<label class="img-drop" id="scan-drop">📷 Chụp / chọn ảnh lá bài<input type="file" id="scan-file" accept="image/*" capture="environment" hidden></label>' +
       '<div class="form-actions"><button type="button" class="btn secondary" id="scan-cam-open">📹 Hoặc chụp bằng webcam / camera máy</button></div>' +
       '<div id="scan-cam" hidden><video id="scan-video" autoplay playsinline style="width:100%;border-radius:12px;background:#000"></video>' +
       '<div class="form-actions"><button type="button" class="btn" id="scan-cam-shot">Chụp ảnh này</button><button type="button" class="btn secondary" id="scan-cam-close">Tắt camera</button></div></div>' +
       '<div id="scan-preview"></div>' +
-      '<div class="form-actions"><button type="button" class="btn" id="scan-go" disabled>Nhận diện lá này (1 lượt)</button></div>' +
+      (active
+        ? '<div class="form-actions"><button type="button" class="btn" id="scan-go" disabled>Nhận diện lá này (1 lượt)</button></div>'
+        : '<p class="panel-note">Chưa có key CardSight đang dùng — nút quét CardSight (dự phòng, 1 lượt) chưa dùng được. Thêm key ở mục phía trên, hoặc cứ dùng Quét OCR miễn phí bên dưới, không cần key.</p>') +
       '<div class="scan-ocr" style="margin-top:16px;padding-top:14px;border-top:1px dashed #bbb">' +
       '<h4 style="margin:0 0 6px">Quét OCR — miễn phí (thử nghiệm)</h4>' +
       '<p class="panel-note">Dùng chung ảnh đã chụp/chọn ở trên: OCR (Tesseract.js) đọc tên + số in trên lá rồi tra từ điển lá bài ngay trên máy — không tốn lượt CardSight. Lá Nhật cần tải thêm dữ liệu tiếng Nhật ở lần đầu, sẽ lâu hơn.</p>' +
@@ -2702,7 +2712,7 @@
         resizeImage(file).then(function (url) {
           scanState.photo = url; scanState.result = null;
           $('scan-preview').innerHTML = '<img class="img-preview" src="' + url + '" alt="Ảnh lá bài vừa chọn">';
-          $('scan-go').disabled = false;
+          var sg1 = $('scan-go'); if (sg1) sg1.disabled = false;
           var ocrBtn1 = $('scan-ocr-go'); if (ocrBtn1) ocrBtn1.disabled = false;
           $('scan-result').innerHTML = '';
         }).catch(function () { toast('Đọc ảnh không được.', 'err'); });
