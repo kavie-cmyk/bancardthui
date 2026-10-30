@@ -138,16 +138,42 @@
   }
 
   function renderGrid() {
-    var q = norm(document.getElementById('q').value);
+    var rawQ = document.getElementById('q').value;
+    var q = norm(rawQ);
     var sort = document.getElementById('sort').value;
     var list = rows.filter(function (r) {
       if (langFilter !== 'all' && (r.language || 'en') !== langFilter) return false;
-      if (q && norm(r.name).indexOf(q) < 0 && norm(r.set_name).indexOf(q) < 0) return false;
       return true;
     });
-    if (sort === 'asc') list.sort(function (a, b) { return a.price - b.price; });
-    else if (sort === 'desc') list.sort(function (a, b) { return b.price - a.price; });
-    else list.sort(function (a, b) { return String(b.created_at || '') < String(a.created_at || '') ? -1 : 1; });
+    var matcherRanked = false;
+    if (q && window.BCTMatch && typeof window.BCTMatch.searchList === 'function') {
+      try {
+        var matched = window.BCTMatch.searchList(list, rawQ, function (r) {
+          return {
+            name: r.name || '',
+            set: ((r.set_name || '') + ' ' + (r.set_id || '')).trim(),
+            number: r.number || ''
+          };
+        });
+        if (Array.isArray(matched)) {
+          // Phòng thủ: nếu matcher trả wrapper {item, score} thì bóc item gốc.
+          list = matched.map(function (m) { return (m && m.item && typeof m.item === 'object') ? m.item : m; });
+          matcherRanked = true;
+        }
+      } catch (e) { /* rơi xuống logic cũ bên dưới */ }
+    }
+    if (q && !matcherRanked) {
+      list = list.filter(function (r) {
+        return norm(r.name).indexOf(q) >= 0 || norm(r.set_name).indexOf(q) >= 0;
+      });
+    }
+    // Có truy vấn + matcher đã xếp hạng thì giữ thứ hạng matcher; còn lại
+    // (truy vấn rỗng, hoặc fallback logic cũ) tôn trọng sắp xếp hiện tại.
+    if (!matcherRanked) {
+      if (sort === 'asc') list.sort(function (a, b) { return a.price - b.price; });
+      else if (sort === 'desc') list.sort(function (a, b) { return b.price - a.price; });
+      else list.sort(function (a, b) { return String(b.created_at || '') < String(a.created_at || '') ? -1 : 1; });
+    }
 
     var count = document.getElementById('catalog-count');
     if (count) count.textContent = rows.length ? rows.length + ' lá đang bán' : 'Đang bổ sung thẻ';

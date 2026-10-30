@@ -453,7 +453,8 @@
   }
 
   function filteredKhoCards() {
-    var q = khoFilter.q.toLowerCase();
+    var rawQ = String(khoFilter.q || '');
+    var q = rawQ.toLowerCase();
     var list = S.cards.filter(function (c) {
       if (khoFilter.set && c.set !== khoFilter.set) return false;
       if (khoFilter.rarity && c.rarity !== khoFilter.rarity) return false;
@@ -467,15 +468,38 @@
       if (khoFilter.misprintOnly && !c.misprint) return false;
       if (khoFilter.gradedOnly && !c.graded) return false;
       if (khoFilter.loc && (c.storageLocation || '').toLowerCase().indexOf(khoFilter.loc.toLowerCase()) < 0) return false;
-      if (q && (c.name + ' ' + c.set + ' ' + c.number + ' ' + (c.storageLocation || '')).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
-    list.sort(function (a, b) {
-      if (khoFilter.sort === 'stock') return BCT.stockOf(S, b.id) - BCT.stockOf(S, a.id);
-      if (khoFilter.sort === 'capital') return (BCT.stockOf(S, b.id) * BCT.avgCostOf(S, b.id)) - (BCT.stockOf(S, a.id) * BCT.avgCostOf(S, a.id));
-      return a.name.localeCompare(b.name);
+    function sortList() {
+      list.sort(function (a, b) {
+        if (khoFilter.sort === 'stock') return BCT.stockOf(S, b.id) - BCT.stockOf(S, a.id);
+        if (khoFilter.sort === 'capital') return (BCT.stockOf(S, b.id) * BCT.avgCostOf(S, b.id)) - (BCT.stockOf(S, a.id) * BCT.avgCostOf(S, a.id));
+        return a.name.localeCompare(b.name);
+      });
+      return list;
+    }
+    if (!rawQ.trim()) return sortList();
+    // Có matcher: xếp hạng/khớp mờ theo tên + set (kèm setId) + số.
+    if (window.BCTMatch && typeof window.BCTMatch.searchList === 'function') {
+      try {
+        var matched = window.BCTMatch.searchList(list, rawQ, function (c) {
+          return {
+            name: c.name || '',
+            set: ((c.set || '') + ' ' + (c.setId || '')).trim(),
+            number: c.number || ''
+          };
+        });
+        if (Array.isArray(matched)) {
+          // Phòng thủ: nếu matcher trả wrapper {item, score} thì bóc item gốc.
+          return matched.map(function (m) { return (m && m.item && typeof m.item === 'object') ? m.item : m; });
+        }
+      } catch (e) { /* rơi xuống logic cũ bên dưới */ }
+    }
+    // Fallback nguyên logic cũ khi thiếu/lỗi matcher.
+    list = list.filter(function (c) {
+      return (c.name + ' ' + c.set + ' ' + c.number + ' ' + (c.storageLocation || '')).toLowerCase().indexOf(q) >= 0;
     });
-    return list;
+    return sortList();
   }
 
   function khoCards() {
@@ -1440,6 +1464,237 @@
   function stopScanCam() {
     if (scanState.stream) { scanState.stream.getTracks().forEach(function (t) { t.stop(); }); scanState.stream = null; }
   }
+
+  /* ----- OCR thử nghiệm: dictionary nạp lười + Tesseract.js nạp lười -----
+   * Dictionary (js/cards-dict.js, global BCT_DICT) KHÔNG nạp ở index.html;
+   * chỉ tải 1 lần khi cần tra cứu OCR đầu tiên, cache promise lại.
+   * Lỗi nạp -> trả null (UI báo nhẹ, không sập trang, CardSight vẫn dùng được). */
+  var dictPromise = null;
+  var dictIndex = null;
+  function ensureDict() {
+    if (dictIndex) return Promise.resolve(dictIndex);
+    if (dictPromise) return dictPromise;
+    dictPromise = new Promise(function (resolve) {
+      function build() {
+        try {
+          if (window.BCTMatch && typeof window.BCTMatch.buildIndex === 'function' && window.BCT_DICT) {
+            dictIndex = window.BCTMatch.buildIndex(window.BCT_DICT) || null;
+            resolve(dictIndex);
+          } else resolve(null);
+        } catch (e) { resolve(null); }
+      }
+      if (window.BCT_DICT) { build(); return; }
+      if (!window.BCTMatch || typeof window.BCTMatch.buildIndex !== 'function') { resolve(null); return; }
+      if (typeof document === 'undefined' || !document.createElement) { resolve(null); return; }
+      var sc = document.createElement('script');
+      sc.src = 'js/cards-dict.js?v=20261030-ocr1';
+      sc.async = true;
+      sc.onload = build;
+      sc.onerror = function () { resolve(null); };
+      (document.head || document.body || document.documentElement).appendChild(sc);
+    });
+    return dictPromise;
+  }
+
+  var tesseractPromise = null;
+  function ensureTesseract() {
+    if (window.Tesseract && typeof window.Tesseract.recognize === 'function') return Promise.resolve(window.Tesseract);
+    if (tesseractPromise) return tesseractPromise;
+    var p = new Promise(function (resolve, reject) {
+      if (typeof document === 'undefined' || !document.createElement) { reject(new Error('Không nạp được thư viện OCR.')); return; }
+      var sc = document.createElement('script');
+      sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      sc.async = true;
+      sc.onload = function () {
+        if (window.Tesseract) resolve(window.Tesseract);
+        else reject(new Error('Không nạp được thư viện OCR.'));
+      };
+      sc.onerror = function () { reject(new Error('Không nạp được thư viện OCR (kiểm tra mạng/CDN).')); };
+      (document.head || document.body || document.documentElement).appendChild(sc);
+    });
+    tesseractPromise = p;
+    // Nạp hỏng thì cho lần bấm sau thử lại thay vì cache lỗi vĩnh viễn.
+    p.catch(function () { if (tesseractPromise === p) tesseractPromise = null; });
+    return p;
+  }
+
+  var scanOcrCandidates = [];
+  var OCR_NUMBER_WHITELIST = '0123456789/ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  function ocrScorePct(cand) {
+    var s = Number(cand && cand.score);
+    if (!isFinite(s)) return 0;
+    var pct = s <= 1 ? s * 100 : s;
+    return Math.max(0, Math.min(100, Math.round(pct)));
+  }
+  function ocrCandidateLang(cand) {
+    var l = cand && cand.lang;
+    return (l === 'jp' || l === 'ja' || l === 1 || l === '1') ? 'jp' : 'en';
+  }
+  function ocrSetStatus(msg) {
+    var el = document.getElementById('scan-ocr-status');
+    if (el) el.textContent = msg;
+  }
+  function loadScanImage(src) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () { resolve(img); };
+      img.onerror = function () { reject(new Error('Không đọc được ảnh đã chọn.')); };
+      img.src = src;
+    });
+  }
+  // Crop 1 vùng (theo tỉ lệ 0..1) + upscale 2x + grayscale/tương phản nhẹ.
+  // invert=true: đảo cực sau tiền xử lý — số in trên nền tối (vd lá SM chữ tối
+  // chìm vào nền) thì bản thường OCR ra rỗng, bản đảo cực mới đọc được.
+  function ocrCropCanvas(img, fx0, fy0, fx1, fy1, invert) {
+    var W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+    var sx = Math.max(0, Math.floor(W * fx0)), sy = Math.max(0, Math.floor(H * fy0));
+    var sw = Math.max(1, Math.floor(W * (fx1 - fx0))), sh = Math.max(1, Math.floor(H * (fy1 - fy0)));
+    var cv = document.createElement('canvas');
+    cv.width = sw * 2; cv.height = sh * 2;
+    var ctx = cv.getContext('2d');
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+    try {
+      var data = ctx.getImageData(0, 0, cv.width, cv.height), px = data.data;
+      for (var i = 0; i < px.length; i += 4) {
+        var gray = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+        var v = (gray - 128) * 1.25 + 128;
+        v = v < 0 ? 0 : (v > 255 ? 255 : v);
+        if (invert) v = 255 - v;
+        px[i] = px[i + 1] = px[i + 2] = v;
+      }
+      ctx.putImageData(data, 0, 0);
+    } catch (e) { /* tiền xử lý hỏng thì vẫn OCR trên ảnh crop gốc */ }
+    return cv;
+  }
+  async function ocrRecognizeText(canvas, lang, extraOpts) {
+    var Tess = await ensureTesseract();
+    var opts = {
+      logger: function (m) {
+        if (m && m.status) {
+          ocrSetStatus('OCR: ' + m.status + (typeof m.progress === 'number' ? ' ' + Math.round(m.progress * 100) + '%' : ''));
+        }
+      }
+    };
+    if (extraOpts) Object.keys(extraOpts).forEach(function (k) { opts[k] = extraOpts[k]; });
+    var out = await Tess.recognize(canvas, lang, opts);
+    return out && out.data ? (out.data.text || '') : '';
+  }
+  function ocrFallbackHTML() {
+    return '<div class="form-actions"><button type="button" class="btn" id="scan-ocr-fallback">Không đúng lá nào? Quét bằng CardSight (1 lượt)</button></div>';
+  }
+  function bindOcrResultButtons() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ocr-cand]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var cand = scanOcrCandidates[Number(btn.getAttribute('data-ocr-cand'))];
+        if (!cand) return;
+        var pct = ocrScorePct(cand);
+        var res = {
+          name: cand.name || '',
+          setName: cand.setName || cand.set || '',
+          number: cand.number || '',
+          language: ocrCandidateLang(cand),
+          confidence: 'OCR ' + pct + '%',
+          _source: 'ocr'
+        };
+        scanState.result = res;
+        document.getElementById('scan-result').innerHTML = scanConfirmHTML(res);
+        bindScanForm();
+      });
+    });
+    var fb = document.getElementById('scan-ocr-fallback');
+    if (fb) fb.addEventListener('click', function () {
+      var g = document.getElementById('scan-go');
+      if (!g) { toast('Chưa có nút CardSight trên trang.'); return; }
+      if (g.scrollIntoView) g.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      g.click();
+    });
+  }
+  function renderOcrCandidates(candidates, nameText, numberText) {
+    scanOcrCandidates = candidates || [];
+    var box = document.getElementById('scan-result');
+    if (!box) return;
+    var head = '<div class="scan-meta">OCR đọc được tên: <b>' + BCT.esc(nameText || '—') + '</b>' +
+      (numberText ? ' · số: <b>' + BCT.esc(numberText) + '</b>' : '') + '</div>';
+    if (!scanOcrCandidates.length) {
+      box.innerHTML = head +
+        '<div class="scan-meta warn">Chưa khớp được lá nào trong từ điển. Thử ảnh rõ hơn / đúng chiều, hoặc quét bằng CardSight.</div>' +
+        ocrFallbackHTML();
+      bindOcrResultButtons();
+      return;
+    }
+    box.innerHTML = head +
+      '<div class="scan-meta">Chạm vào lá đúng để sang màn xác nhận như quét CardSight:</div>' +
+      '<div style="display:grid;gap:8px;margin-top:8px">' +
+      scanOcrCandidates.map(function (cand, i) {
+        var pct = ocrScorePct(cand);
+        var tmpCard = { setId: cand.setId || '', language: ocrCandidateLang(cand), number: cand.number || '', name: cand.name || '', images: [] };
+        var thumb = cardImgTag(tmpCard, 'low', '', cand.name);
+        if (thumb) thumb = thumb.replace('<img', '<img style="width:56px;height:auto;display:block"');
+        else if (scanState.photo) thumb = '<img src="' + scanState.photo + '" alt="Ảnh chụp lá bài" style="width:56px;height:auto;display:block">';
+        return '<button type="button" class="btn secondary" data-ocr-cand="' + i + '" style="display:flex;gap:12px;align-items:center;text-align:left;width:100%">' +
+          '<span style="flex:0 0 56px">' + thumb + '</span>' +
+          '<span><b>' + BCT.esc(cand.name || '') + '</b><br>' +
+          BCT.esc(cand.setName || cand.setId || '') + (cand.number ? ' · #' + BCT.esc(cand.number) : '') +
+          ' · tin cậy ' + pct + '%</span></button>';
+      }).join('') + '</div>' + ocrFallbackHTML();
+    bindOcrResultButtons();
+  }
+  async function runOcrScan() {
+    if (!scanState.photo) { toast('Chụp / chọn ảnh lá bài trước đã.'); return; }
+    var btn = document.getElementById('scan-ocr-go');
+    var jpEl = document.getElementById('scan-ocr-jp');
+    var isJp = !!(jpEl && jpEl.checked);
+    if (btn) btn.disabled = true;
+    try {
+      ocrSetStatus('Đang nạp thư viện OCR…');
+      await ensureTesseract();
+      var img = await loadScanImage(scanState.photo);
+      // Vùng tên: dải ngang trên cùng. Vùng số in: góc dưới trái.
+      var nameCanvas = ocrCropCanvas(img, 0.04, 0.02, 0.75, 0.13);
+      var nameRaw = await ocrRecognizeText(nameCanvas, isJp ? 'jpn+eng' : 'eng', null);
+      var numCanvas = ocrCropCanvas(img, 0, 0.88, 0.30, 1.0);
+      var numRaw = await ocrRecognizeText(numCanvas, 'eng', { tessedit_char_whitelist: OCR_NUMBER_WHITELIST });
+      var nameText = String(nameRaw || '').replace(/\s+/g, ' ').trim();
+      var numberText = (window.BCTMatch && typeof window.BCTMatch.fixNumber === 'function')
+        ? String(window.BCTMatch.fixNumber(numRaw) || '').trim()
+        : String(numRaw || '').replace(/\s+/g, ' ').trim();
+      // Chưa trích được chữ số nào → thử lại vùng số với ảnh ĐẢO CỰC (số in
+      // trên nền tối). Chỉ nhận kết quả đảo cực khi nó có chữ số thật.
+      var numHasDigit = /\d/.test((window.BCTMatch && typeof window.BCTMatch.numKey === 'function') ? window.BCTMatch.numKey(numberText) : numberText);
+      if (!numHasDigit) {
+        try {
+          var numRawInv = await ocrRecognizeText(ocrCropCanvas(img, 0, 0.88, 0.30, 1.0, true), 'eng', { tessedit_char_whitelist: OCR_NUMBER_WHITELIST });
+          var numInv = (window.BCTMatch && typeof window.BCTMatch.fixNumber === 'function')
+            ? String(window.BCTMatch.fixNumber(numRawInv) || '').trim() : '';
+          var invKey = (window.BCTMatch && typeof window.BCTMatch.numKey === 'function') ? window.BCTMatch.numKey(numInv) : numInv;
+          // Chỉ nhận khi là mẫu "n/total" hoặc ≥2 chữ số — tránh nhận bừa
+          // 1 chữ số rác OCR bịa từ artwork (đã gặp ở test thật).
+          if (numInv.indexOf('/') >= 0 || invKey.replace(/\D/g, '').length >= 2) numberText = numInv;
+        } catch (eInv) { /* giữ kết quả lần đầu */ }
+      }
+      if (!nameText && !numberText) throw new Error('OCR không đọc được chữ trên lá.');
+      ocrSetStatus('Đang tra từ điển lá bài…');
+      var index = await ensureDict();
+      if (!index || !window.BCTMatch || typeof window.BCTMatch.searchDict !== 'function') {
+        ocrSetStatus('Chưa nạp được từ điển lá bài — kiểm tra mạng rồi thử lại, hoặc quét bằng CardSight.');
+        toast('Chưa nạp được từ điển lá bài. Vẫn có thể quét bằng CardSight (1 lượt).');
+        var box0 = document.getElementById('scan-result');
+        if (box0) { box0.innerHTML = ocrFallbackHTML(); bindOcrResultButtons(); }
+        return;
+      }
+      var candidates = window.BCTMatch.searchDict(index, { name: nameText, number: numberText }, { lang: isJp ? 'jp' : undefined, limit: 6 });
+      candidates = Array.isArray(candidates) ? candidates.slice(0, 6) : [];
+      renderOcrCandidates(candidates, nameText, numberText);
+      ocrSetStatus(candidates.length ? 'Đã tìm thấy ' + candidates.length + ' ứng viên — chạm vào lá đúng.' : 'Không khớp lá nào trong từ điển.');
+      if (!candidates.length) toast('OCR chưa khớp được lá nào — có thể quét bằng CardSight.');
+    } catch (e) {
+      ocrSetStatus('OCR lỗi: ' + (e.message || e));
+      toast((e.message || 'OCR thất bại.') + ' Vẫn có thể quét bằng CardSight (1 lượt).');
+    } finally {
+      if (btn) btn.disabled = !scanState.photo;
+    }
+  }
+
   function vQuet() {
     var tokens = BCT.getCardSightKeys();
     var active = BCT.getCardSightKey();
@@ -1468,6 +1723,13 @@
       '<div class="form-actions"><button type="button" class="btn" id="scan-cam-shot">Chụp ảnh này</button><button type="button" class="btn secondary" id="scan-cam-close">Tắt camera</button></div></div>' +
       '<div id="scan-preview"></div>' +
       '<div class="form-actions"><button type="button" class="btn" id="scan-go" disabled>Nhận diện lá này (1 lượt)</button></div>' +
+      '<div class="scan-ocr" style="margin-top:16px;padding-top:14px;border-top:1px dashed #bbb">' +
+      '<h4 style="margin:0 0 6px">Quét OCR — miễn phí (thử nghiệm)</h4>' +
+      '<p class="panel-note">Dùng chung ảnh đã chụp/chọn ở trên: OCR (Tesseract.js) đọc tên + số in trên lá rồi tra từ điển lá bài ngay trên máy — không tốn lượt CardSight. Lá Nhật cần tải thêm dữ liệu tiếng Nhật ở lần đầu, sẽ lâu hơn.</p>' +
+      '<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="scan-ocr-jp"> Lá Nhật</label>' +
+      '<div class="form-actions"><button type="button" class="btn secondary" id="scan-ocr-go"' + (scanState.photo ? '' : ' disabled') + '>Quét bằng OCR (miễn phí)</button></div>' +
+      '<div id="scan-ocr-status" role="status" aria-live="polite" style="min-height:1.2em"></div>' +
+      '</div>' +
       '<div id="scan-result"></div></section>';
     return html;
   }
@@ -1549,7 +1811,7 @@
           var card = await BCT.addCard(S, {
             name: name, set: setName, setId: setHit ? setHit.id : null,
             number: num, rarity: $('s-rarity').value, condition: $('s-cond').value,
-            language: language, storageLocation: '', note: 'Nhập qua Quét thẻ (CardSight)',
+            language: language, storageLocation: '', note: (scanState.result && scanState.result._source === 'ocr' ? 'Nhập qua Quét thẻ (OCR)' : 'Nhập qua Quét thẻ (CardSight)'),
             graded: g ? { org: g.org, score: g.score || '' } : null,
             certNumber: g ? (g.cert || '') : ''
           });
@@ -2441,6 +2703,7 @@
           scanState.photo = url; scanState.result = null;
           $('scan-preview').innerHTML = '<img class="img-preview" src="' + url + '" alt="Ảnh lá bài vừa chọn">';
           $('scan-go').disabled = false;
+          var ocrBtn1 = $('scan-ocr-go'); if (ocrBtn1) ocrBtn1.disabled = false;
           $('scan-result').innerHTML = '';
         }).catch(function () { toast('Đọc ảnh không được.', 'err'); });
       });
@@ -2471,6 +2734,7 @@
         $('scan-result').innerHTML = '';
         var g = $('scan-go');
         if (g) { g.disabled = false; g.textContent = 'Nhận diện lá này (1 lượt)'; }
+        var ocrBtn2 = $('scan-ocr-go'); if (ocrBtn2) ocrBtn2.disabled = false;
         stopScanCam();
         var b = $('scan-cam'); if (b) b.hidden = true;
       });
@@ -2491,6 +2755,8 @@
           scanGo.disabled = false; scanGo.textContent = 'Nhận diện lá này (1 lượt)';
         });
       });
+      var ocrGo = $('scan-ocr-go');
+      if (ocrGo) ocrGo.addEventListener('click', function () { runOcrScan(); });
     }
 
     if (base === 'rao') {
