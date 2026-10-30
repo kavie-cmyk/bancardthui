@@ -1487,7 +1487,7 @@
       if (!window.BCTMatch || typeof window.BCTMatch.buildIndex !== 'function') { resolve(null); return; }
       if (typeof document === 'undefined' || !document.createElement) { resolve(null); return; }
       var sc = document.createElement('script');
-      sc.src = 'js/cards-dict.js?v=20261030-ocr2';
+      sc.src = 'js/cards-dict.js?v=20261030-ocr3';
       sc.async = true;
       sc.onload = build;
       sc.onerror = function () { resolve(null); };
@@ -1661,7 +1661,17 @@
       var nameRaw = await ocrRecognizeText(nameCanvas, isJp ? 'jpn+eng' : 'eng', null);
       var numCanvas = ocrCropCanvas(img, 0, 0.88, 0.30, 1.0);
       var numRaw = await ocrRecognizeText(numCanvas, 'eng', { tessedit_char_whitelist: OCR_NUMBER_WHITELIST });
-      var nameText = String(nameRaw || '').replace(/\s+/g, ' ').trim();
+      // Tên lá luôn ở DÒNG TRÊN CÙNG của vùng tên; các dòng dưới là rác từ
+      // artwork làm hỏng tra cứu → chỉ lấy dòng đầu tiên có chữ. Dòng đầu
+      // rỗng/không có chữ mới lùi về toàn bộ text như trước.
+      var nameFullText = String(nameRaw || '').replace(/\s+/g, ' ').trim();
+      var nameFirstLine = '';
+      var nameLines = String(nameRaw || '').split(/\r?\n/);
+      for (var nl = 0; nl < nameLines.length; nl++) {
+        var lineText = nameLines[nl].replace(/\s+/g, ' ').trim();
+        if (/[0-9A-Za-z\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(lineText)) { nameFirstLine = lineText; break; }
+      }
+      var nameText = nameFirstLine || nameFullText;
       var numberText = (window.BCTMatch && typeof window.BCTMatch.fixNumber === 'function')
         ? String(window.BCTMatch.fixNumber(numRaw) || '').trim()
         : String(numRaw || '').replace(/\s+/g, ' ').trim();
@@ -1689,8 +1699,31 @@
         if (box0) { box0.innerHTML = ocrFallbackHTML(); bindOcrResultButtons(); }
         return;
       }
-      var candidates = window.BCTMatch.searchDict(index, { name: nameText, number: numberText }, { lang: isJp ? 'jp' : undefined, limit: 6 });
+      var searchOpts = { lang: isJp ? 'jp' : undefined, limit: 6 };
+      var candidates = window.BCTMatch.searchDict(index, { name: nameText, number: numberText }, searchOpts);
       candidates = Array.isArray(candidates) ? candidates.slice(0, 6) : [];
+      // Ứng viên tốt nhất còn yếu (< 130 = chưa có lá nào khớp cả tên + số):
+      // chạy thêm đường SỐ-ONLY (cứu lá full-art mà crop tên đọc ra rác nhưng
+      // số in đúng) và TÊN-ONLY, rồi gộp + khử trùng + sắp xếp lại theo điểm.
+      // "Không khớp lá nào" chỉ hiện khi cả 3 đường đều rỗng.
+      var bestScore = candidates.length ? (candidates[0].score || 0) : 0;
+      if (bestScore < 130) {
+        var extraRuns = [];
+        if (numberText) extraRuns.push(window.BCTMatch.searchDict(index, { number: numberText }, searchOpts));
+        if (nameText) extraRuns.push(window.BCTMatch.searchDict(index, { name: nameText }, searchOpts));
+        var seenCand = Object.create(null);
+        var merged = [];
+        [candidates].concat(extraRuns).forEach(function (list) {
+          (Array.isArray(list) ? list : []).forEach(function (cand) {
+            var key = String(cand.setId || '') + '|' + String(cand.number || '') + '|' + String(cand.name || '');
+            if (seenCand[key]) return;
+            seenCand[key] = true;
+            merged.push(cand);
+          });
+        });
+        merged.sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+        candidates = merged.slice(0, 6);
+      }
       renderOcrCandidates(candidates, nameText, numberText);
       ocrSetStatus(candidates.length ? 'Đã tìm thấy ' + candidates.length + ' ứng viên — chạm vào lá đúng.' : 'Không khớp lá nào trong từ điển.');
       if (!candidates.length) toast('OCR chưa khớp được lá nào.');

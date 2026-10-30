@@ -59,7 +59,8 @@ const FIXTURE = {
     cel25: ['Celebrations', '25th Anniversary Collection'],
     sv08: ['Surging Sparks', '超電ブレイカー'],
     sm10: ['Unbroken Bonds', 'ダブルブレイズ'],
-    s12a: ['VSTAR Universe', 'VSTARユニバース']
+    s12a: ['VSTAR Universe', 'VSTARユニバース'],
+    SV8: ['Super Electric Breaker', '超電ブレイカー']
   },
   cards: [
     ['Pikachu', 'base1', '58', 0],
@@ -70,7 +71,9 @@ const FIXTURE = {
     ['Spritzee', 'sm10', '141', 0],
     ['Latios', 'sv08', '077', 0],
     ['メタモン', 's12a', '117', 1],
-    ['ピカチュウ', 's12a', '25', 1]
+    ['ピカチュウ', 's12a', '25', 1],
+    ['ピカチュウex', 'SV8', '033', 1],
+    ['ピカチュウex', 'SV8', '136', 1]
   ]
 };
 const index = M.buildIndex(FIXTURE);
@@ -303,6 +306,72 @@ check('searchDict: số OCR trích đúng + tên Nhật → lá đúng vào top-
   assert.equal(M.numKey(res[0].number), '117');
   assert.equal(res[0].name, 'メタモン');
 });
+
+// ---------- Hồi quy OCR lá Nhật SV8: hậu tố ex bị OCR đọc thành rác ----------
+// Ca thật đã đo trên ảnh sạch SV8-033: OCR tên đọc được token "ピカ チュ ウ"
+// nhưng hậu tố "ex" thành ký tự rác và vùng tên lẫn nhiều dòng rác artwork;
+// số in đọc "033/706" (tổng 106→706 sai nhưng numKey=33 đúng). Trước sửa:
+// scoreName("ピカチュウex") = 0 → lá đúng bị cổng tên loại, "không có ứng viên".
+const OCR_NAME_SV8_033 = 'ジン ピカ チュ ウ @② 々 め ワー - 志 23 し カチ .3 ング ENFIVEK ィング アー — ララ';
+
+check('searchDict: ca1 OCR thật SV8-033 (tên rác + "033/706") → top có ピカチュウex SV8-033', () => {
+  const res = M.searchDict(index, { name: OCR_NAME_SV8_033, number: '033/706' }, { lang: 'jp', limit: 6 });
+  assert.ok(res.length > 0, 'phải có ứng viên');
+  assert.ok(res.some(r => r.name === 'ピカチュウex' && r.setId === 'SV8' && String(r.number) === '033'),
+    'top không có ピカチュウex SV8-033: ' + JSON.stringify(res));
+  assert.equal(res[0].name, 'ピカチュウex'); // trên fixture: lá duy nhất mang số 33
+});
+
+check('searchDict: tên gốc bỏ hậu tố — "ピカチュウ" (không hậu tố) vẫn ra ピカチュウex; "Pikachu ex" tách token khớp tuyệt đối', () => {
+  const jp = M.searchDict(index, { name: 'ピカチュウ' }, { lang: 'jp', limit: 6 });
+  assert.ok(jp.some(r => r.name === 'ピカチュウex' && r.setId === 'SV8'), 'thiếu ピカチュウex: ' + JSON.stringify(jp));
+  const en = M.searchDict(index, { name: 'Pikachu ex', number: '57' });
+  assert.ok(en.length > 0 && en[0].name === 'Pikachu ex' && String(en[0].number) === '57');
+});
+
+check('searchDict: ca2 số-only "136/706" + tên rác → ピカチュウex SV8-136 có trong ứng viên', () => {
+  // Đường SỐ-ONLY (phần cardmatch của logic gộp đa chiến lược ở app.js —
+  // app.js chạy thêm searchDict({number}) khi ứng viên tốt nhất < 130):
+  const byNum = M.searchDict(index, { number: '136/706' }, { lang: 'jp', limit: 6 });
+  assert.ok(byNum.some(r => r.name === 'ピカチュウex' && r.setId === 'SV8' && String(r.number) === '136'),
+    'số-only thiếu SV8-136: ' + JSON.stringify(byNum));
+  // Đường kết hợp với chính chuỗi tên rác của ca1 cũng phải chứa lá này:
+  const combined = M.searchDict(index, { name: OCR_NAME_SV8_033, number: '136/706' }, { lang: 'jp', limit: 6 });
+  assert.ok(combined.some(r => r.name === 'ピカチュウex' && r.setId === 'SV8' && String(r.number) === '136'),
+    'kết hợp thiếu SV8-136: ' + JSON.stringify(combined));
+});
+
+check('searchDict: cổng tên không nới bừa — tên không liên quan + số 033 không lọt ピカチュウex SV8', () => {
+  const res = M.searchDict(index, { name: 'Charizard', number: '033/706' }, { lang: 'jp', limit: 6 });
+  assert.ok(!res.some(r => r.setId === 'SV8'), 'lá SV8 lọt dù tên không liên quan: ' + JSON.stringify(res));
+  // Số khớp (57 = Pikachu ex) nhưng tên hoàn toàn không liên quan: cổng tên
+  // phải vẫn loại Pikachu ex và fallback theo tên phải đưa Charizard lên top.
+  const res2 = M.searchDict(index, { name: 'Charizard', number: '57' }, { limit: 6 });
+  assert.ok(res2.length > 0 && res2[0].name === 'Charizard', 'top phải là Charizard: ' + JSON.stringify(res2));
+  assert.ok(!res2.some(r => r.name === 'Pikachu ex'), 'Pikachu ex không được lọt khi tên không liên quan');
+});
+
+if (realDict) {
+  check('dict thật: ca1 OCR SV8-033 → ピカチュウex SV8-033 nằm trong top ứng viên kết hợp', () => {
+    const ridx = M.buildIndex(realDict);
+    const res = M.searchDict(ridx, { name: OCR_NAME_SV8_033, number: '033/706' }, { lang: 'jp', limit: 6 });
+    const rank = res.findIndex(r => r.name === 'ピカチュウex' && r.setId === 'SV8' && String(r.number) === '033');
+    assert.ok(rank >= 0, 'không thấy SV8-033 trong top 6 dict thật: ' + JSON.stringify(res));
+    console.log(`  (dict thật: SV8-033 hạng ${rank + 1}/${res.length}, score ${res[rank].score})`);
+  });
+  check('dict thật: ca2 số-only "136/706" có ピカチュウex SV8-136; kết hợp tên rác + 136 cũng có', () => {
+    const ridx = M.buildIndex(realDict);
+    // Dict thật có 14 lá JP mang số 136 → số-only cần limit rộng mới chứa hết;
+    // đây là phần cardmatch của ca2, logic gộp/cắt top-6 nằm ở app.js.
+    const byNum = M.searchDict(ridx, { number: '136/706' }, { lang: 'jp', limit: 20 });
+    const rankNum = byNum.findIndex(r => r.name === 'ピカチュウex' && r.setId === 'SV8' && String(r.number) === '136');
+    assert.ok(rankNum >= 0, 'số-only (limit 20) thiếu SV8-136');
+    console.log(`  (dict thật: SV8-136 hạng ${rankNum + 1} ở đường số-only limit 20)`);
+    const combined = M.searchDict(ridx, { name: OCR_NAME_SV8_033, number: '136/706' }, { lang: 'jp', limit: 6 });
+    assert.ok(combined.some(r => r.name === 'ピカチュウex' && r.setId === 'SV8' && String(r.number) === '136'),
+      'kết hợp thiếu SV8-136: ' + JSON.stringify(combined));
+  });
+}
 
 // ---------- Node export ----------
 check('Node: module.exports === BCTMatch (nạp qua require)', () => {

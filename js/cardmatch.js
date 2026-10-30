@@ -209,6 +209,52 @@
     return prev[lb];
   }
 
+  // ---------- tên gốc (bỏ hậu tố kiểu Pokémon TCG) ----------
+  // OCR lá Nhật hay mất/rác hoá hậu tố: tên lá in "ピカチュウex" nhưng OCR chỉ
+  // còn "ピカチュウ" + ký tự rác → khớp norm đầy đủ cho 0 điểm và lá đúng bị
+  // cổng tên loại. Vì vậy chấm điểm còn xét DẠNG GỐC: bỏ hậu tố ex/GX/V/VMAX/
+  // VSTAR/V-UNION/BREAK/LV.X khi đứng CUỐI tên — dạng tách token ("Pikachu ex",
+  // "Charizard VMAX", "Pikachu V Union", "Dialga LV X") lẫn dạng dính liền
+  // kiểu Nhật ("ピカチュウex", "スピアーV"). Dạng dính liền CHỈ áp dụng khi gốc
+  // chứa ký tự Nhật: tên Latin thuần kết thúc tự nhiên bằng ex/v (Pokédex,
+  // Smoliv, Calyrex...) không phải hậu tố, bóc đi sẽ tạo tên gốc giả.
+  var SUFFIX_TOKENS = { ex: 1, gx: 1, v: 1, vmax: 1, vstar: 1, 'break': 1 };
+  var JP_CHAR_RE = /[\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/;
+  var ATTACHED_SUFFIXES = ['vunion', 'vmax', 'vstar', 'break', 'lvx', 'gx', 'ex', 'v'];
+  function stripNameSuffix(norm) {
+    if (!norm) return '';
+    var toks = norm.split(' ');
+    while (toks.length > 1) {
+      var last = toks[toks.length - 1], prev = toks[toks.length - 2];
+      if ((prev === 'v' && last === 'union') || (prev === 'lv' && last === 'x')) { toks.length -= 2; continue; }
+      if (SUFFIX_TOKENS[last]) { toks.length -= 1; continue; }
+      break;
+    }
+    var tail = toks[toks.length - 1];
+    if (tail && JP_CHAR_RE.test(tail)) {
+      for (var i = 0; i < ATTACHED_SUFFIXES.length; i++) {
+        var suf = ATTACHED_SUFFIXES[i];
+        if (tail.length > suf.length && tail.slice(tail.length - suf.length) === suf) {
+          var stem = tail.slice(0, tail.length - suf.length);
+          if (stem.length >= 2 && JP_CHAR_RE.test(stem)) { toks[toks.length - 1] = stem; break; }
+        }
+      }
+    }
+    return toks.join(' ');
+  }
+  // Tên gốc của truy vấn/bản ghi chứa nhau → bằng chứng tên ở mức substring (30).
+  // Phần chứa nhau: tên gốc Nhật xét ở mức chuỗi (OCR gộp token + dính nhiễu,
+  // vd token "ジンピカチュウ" chứa gốc "ピカチュウ"); tên gốc Latin xét ở mức
+  // RANH GIỚI TOKEN để "mew" (gốc của Mew ex) không lọt vào truy vấn "mewtwo".
+  function baseNameContains(qBase, recBase) {
+    if (!qBase || !recBase || recBase.length < 3 || qBase.length < 3) return false;
+    if (JP_CHAR_RE.test(recBase) || JP_CHAR_RE.test(qBase)) {
+      return qBase.indexOf(recBase) >= 0 || recBase.indexOf(qBase) >= 0;
+    }
+    return (' ' + qBase + ' ').indexOf(' ' + recBase + ' ') >= 0 ||
+           (' ' + recBase + ' ').indexOf(' ' + qBase + ' ') >= 0;
+  }
+
   // ---------- chấm điểm tên ----------
   // Thang: khớp norm tuyệt đối 60 > prefix 40 > substring 30 > theo token (tối đa 28).
   // Token: khớp tuyệt đối 12, prefix 8, fuzzy Levenshtein 6 (≤1 khi token dài ≥4,
@@ -223,6 +269,12 @@
     // OCR: chuỗi truy vấn DÍNH NHIỄU nhưng chứa trọn tên lá (vd tên Nhật bị
     // gộp token "をタンメタモン…" chứa "メタモン") — vẫn là bằng chứng mạnh.
     if (rn.length >= 3 && qNorm.indexOf(rn) >= 0) return 30;
+    // Tên GỐC bỏ hậu tố: truy vấn chứa tên gốc của lá (hoặc ngược lại) cũng là
+    // bằng chứng mức substring — cứu ca "ピカチュウex" khi OCR mất hậu tố ex.
+    // Chỉ sàn 30 (không nâng lên prefix/tuyệt đối) để lá khớp norm đầy đủ và
+    // lá khớp prefix vẫn xếp trên, và lá không liên quan vẫn bị cổng tên loại.
+    var recBase = rec.baseNorm != null ? rec.baseNorm : stripNameSuffix(rn);
+    if (baseNameContains(stripNameSuffix(qNorm), recBase)) return 30;
     var rt = rec.tokens || [];
     var sum = 0, matched = 0;
     for (var i = 0; i < qTokens.length; i++) {
@@ -269,7 +321,7 @@
       var lang = (row[3] === 1 || row[3] === 'jp' || row[3] === 'ja') ? 'jp' : 'en';
       var norm = normName(name);
       var rec = {
-        name: name, norm: norm, setId: setId, number: number,
+        name: name, norm: norm, baseNorm: stripNameSuffix(norm), setId: setId, number: number,
         numKey: numKey(number), lang: lang,
         tokens: norm ? norm.split(' ') : []
       };

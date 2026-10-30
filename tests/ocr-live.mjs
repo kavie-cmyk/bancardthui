@@ -35,6 +35,9 @@
  *     = OCR_NUMBER_WHITELIST, sau đó qua BCTMatch.fixNumber.
  *   - Tra cứu: BCTMatch.buildIndex(BCT_DICT) + searchDict(index,
  *     { name, number }, { lang: isJp ? 'jp' : undefined, limit: 6 }).
+ *   - Từ bản ocr3 (khớp app.js): tên chỉ lấy DÒNG ĐẦU TIÊN có chữ của OCR
+ *     vùng tên; nếu ứng viên tốt nhất < 130 thì gộp thêm đường SỐ-ONLY và
+ *     TÊN-ONLY (khử trùng setId+number+name, sắp xếp lại theo score, tối đa 6).
  */
 
 import { createRequire } from 'node:module';
@@ -122,7 +125,49 @@ const CARDS = [
     replacementFor: 'SV4a-144' },
   { key: 'pikachu-en-base', apiLang: 'en', id: 'base1-58', isJp: false, note: 'Tuỳ chọn: Pikachu EN phổ biến (Base Set)',
     expectName: 'Pikachu', expectSetId: 'base1', expectSetName: 'Base Set', expectNumber: '58' },
+  { key: 'pikachu-ja-sv8-033', apiLang: 'ja', id: 'SV8-033', isJp: true, note: 'CA LỖI THẬT: ピカチュウex 超電ブレイカー — OCR tên mất hậu tố ex, báo "không có ứng viên"',
+    expectName: 'ピカチュウex', expectSetId: 'SV8', expectSetName: '超電ブレイカー', expectNumber: '033' },
+  { key: 'pikachu-ja-sv8-136', apiLang: 'ja', id: 'SV8-136', isJp: true, note: 'Bản full-art SAR — crop tên cố định đọc ra rác, số in đúng → fallback theo số in',
+    expectName: 'ピカチュウex', expectSetId: 'SV8', expectSetName: '超電ブレイカー', expectNumber: '136',
+    imageGuess: 'https://assets.tcgdex.net/ja/SV/SV8/136/high.webp' },
 ];
+
+// ---------------------------------------------------------------------------
+// Sao chép ĐÚNG pipeline tra cứu của app.js bản ocr3: tên lấy dòng đầu tiên
+// có chữ; gộp ứng viên đa chiến lược khi ứng viên tốt nhất < 130.
+// ---------------------------------------------------------------------------
+function ocrNameText(nameRaw) {
+  const full = String(nameRaw || '').replace(/\s+/g, ' ').trim();
+  for (const line of String(nameRaw || '').split(/\r?\n/)) {
+    const t = line.replace(/\s+/g, ' ').trim();
+    if (/[0-9A-Za-z\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(t)) return t;
+  }
+  return full;
+}
+
+function searchCandidatesMerged(index, nameText, numberFixed, searchLang) {
+  const opts = { lang: searchLang, limit: 6 };
+  let candidates = BCTMatch.searchDict(index, { name: nameText, number: numberFixed }, opts);
+  const best = candidates.length ? (candidates[0].score || 0) : 0;
+  if (best < 130) {
+    const extra = [];
+    if (numberFixed) extra.push(BCTMatch.searchDict(index, { number: numberFixed }, opts));
+    if (nameText) extra.push(BCTMatch.searchDict(index, { name: nameText }, opts));
+    const seen = new Set();
+    const merged = [];
+    for (const list of [candidates, ...extra]) {
+      for (const cand of Array.isArray(list) ? list : []) {
+        const key = `${cand.setId || ''}|${cand.number || ''}|${cand.name || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(cand);
+      }
+    }
+    merged.sort((a, b) => (b.score || 0) - (a.score || 0));
+    candidates = merged.slice(0, 6);
+  }
+  return candidates;
+}
 
 async function fetchCardImage(card) {
   const apiUrl = `https://api.tcgdex.net/v2/${card.apiLang}/cards/${card.id}`;
@@ -231,8 +276,8 @@ async function main() {
       : [{ mode: 'eng', lang: 'eng', searchLang: undefined }];
     for (const m of modes) {
       const nameRaw = await ocrRecognizeText(nameCrop, m.lang, null);
-      const nameText = String(nameRaw || '').replace(/\s+/g, ' ').trim();
-      const candidates = BCTMatch.searchDict(index, { name: nameText, number: numberFixed }, { lang: m.searchLang, limit: 6 });
+      const nameText = ocrNameText(nameRaw);
+      const candidates = searchCandidatesMerged(index, nameText, numberFixed, m.searchLang);
       const run = evaluateRun({ mode: m.mode, ocrLang: m.lang, searchLang: m.searchLang ?? null, nameRaw, nameText, candidates }, card, numberFixed);
       entry.modes.push(run);
       console.log(`[${m.mode}] tên OCR:`, JSON.stringify(nameText), '| top1:', candidates[0] ? `${candidates[0].name} / ${candidates[0].setName} / #${candidates[0].number} / score ${candidates[0].score}` : '(không có)', '|', run.final);
@@ -261,8 +306,8 @@ async function main() {
                      { mode: 'eng (toggle Lá Nhật TẮT)', lang: 'eng', searchLang: undefined }];
       for (const m of modes) {
         const nameRaw = await ocrRecognizeText(nameCrop, m.lang, null);
-        const nameText = String(nameRaw || '').replace(/\s+/g, ' ').trim();
-        const candidates = BCTMatch.searchDict(index, { name: nameText, number: numberFixed }, { lang: m.searchLang, limit: 6 });
+        const nameText = ocrNameText(nameRaw);
+        const candidates = searchCandidatesMerged(index, nameText, numberFixed, m.searchLang);
         const run = evaluateRun({ mode: m.mode, ocrLang: m.lang, searchLang: m.searchLang ?? null, nameRaw, nameText, candidates }, card, numberFixed);
         entry.modes.push(run);
         console.log(`[${m.mode}] tên OCR:`, JSON.stringify(nameText), '|', run.final);
