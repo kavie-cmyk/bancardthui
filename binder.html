@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build Your Binder (bản thử) — Bán Card Thui</title>
+<meta name="description" content="Bản bấm thử tính năng Build Your Binder của Bán Card Thui: xếp lá Pokémon TCG vào trang binder 9 ô theo set.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/store.css?v=20261024-shop6">
+<link rel="stylesheet" href="css/binder.css?v=20261113-binder1">
+</head>
+<body>
+<div class="shop-backdrop" aria-hidden="true"></div>
+<header class="shop-head" id="top">
+  <div class="shop-head-in">
+    <a class="shop-brand" href="store.html" aria-label="Bán Card Thui — Trang chủ">
+      <span class="brand-mark"><img src="assets/hoenn/poke-ball.png" alt="" width="32" height="32"></span>
+      <span><span class="shop-name">Bán Card <em>Thui</em></span><span class="shop-tag">Tiệm thẻ Pokémon của Bự</span></span>
+    </a>
+    <nav class="shop-nav" aria-label="Điều hướng cửa hàng">
+      <a href="store.html#cards">Thẻ đang bán</a>
+      <a href="binder.html" aria-current="page">Xây binder</a>
+      <a href="store.html#tracking">Tra cứu đơn</a>
+    </nav>
+  </div>
+</header>
+
+<main class="shop-wrap">
+  <div class="proto-banner" role="note">
+    <b>🧪 BẢN BẤM THỬ</b> — Tính năng <b>Build Your Binder</b> đang dựng thử để xem cảm giác.
+    Tồn kho &amp; giá trong trang này là <b>dữ liệu mẫu</b>; bản thật sẽ nối kho thật của shop
+    và nút mua sẽ đổ vào giỏ hàng như bình thường.
+  </div>
+
+  <section class="binder-head">
+    <div>
+      <p class="eyebrow">BUILD YOUR BINDER</p>
+      <h2>Xếp binder theo set</h2>
+      <p class="binder-sub">Chọn một set, lật từng trang binder 9 ô. Lá nào shop đang có sẽ hiện giá — bấm để cho vào binder của bạn. Ô xám là lá shop chưa có.</p>
+    </div>
+    <div class="binder-controls">
+      <label for="set-select">Set thẻ</label>
+      <select id="set-select"></select>
+      <p class="set-info" id="set-info">Đang tải danh sách set…</p>
+    </div>
+  </section>
+
+  <div class="binder-layout">
+    <section class="binder-sheet" aria-label="Trang binder">
+      <div class="binder-spine" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="binder-main">
+        <div id="binder-state" class="shop-state" role="status" aria-live="polite">Đang tải lá của set…</div>
+        <div id="pockets" class="pockets"></div>
+        <div class="pager" id="pager" hidden>
+          <button type="button" id="page-prev">← Trang trước</button>
+          <span id="page-label">Trang 1 / 1</span>
+          <button type="button" id="page-next">Trang sau →</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="tray" aria-label="Binder của bạn">
+      <h3>Binder của tôi</h3>
+      <div class="tray-progress">
+        <div class="tray-progress-row"><span id="tray-count">Đã chọn 0 lá</span><span id="tray-setpct"></span></div>
+        <div class="progress"><i id="tray-bar"></i></div>
+        <p class="tray-note" id="tray-note"></p>
+      </div>
+      <div id="tray-list" class="tray-list"></div>
+      <div class="tray-empty" id="tray-empty">
+        <img class="success-img" src="assets/store/mascot.webp" alt="">
+        <p>Chưa chọn lá nào.<br>Bấm vào lá có giá để cho vào binder.</p>
+      </div>
+      <div class="cart-sumrow"><span>Tổng tiền binder</span><b id="tray-total">0₫</b></div>
+      <button type="button" class="co-btn" id="tray-buy" disabled>Mua cả binder →</button>
+      <button type="button" class="co-btn alt" id="tray-clear" disabled>Bỏ chọn hết</button>
+      <p class="tray-bought" id="tray-bought" hidden>Ở bản thật, các lá này sẽ vào <b>giỏ hàng</b> và đặt hàng như bình thường. Bản thử dừng ở đây — cảm ơn bạn đã bấm thử!</p>
+    </aside>
+  </div>
+
+  <footer class="shop-foot">
+    <div><span class="footer-brand">Bán Card <em>Thui</em></span><p>Pokémon TCG singles · Tiệm thẻ của Bự</p></div>
+    <p class="foot-stock">Trang binder đang là bản thử nghiệm.</p>
+    <a href="store.html">Về trang bán <span aria-hidden="true">→</span></a>
+  </footer>
+</main>
+
+<script src="js/binder.js?v=20261113-binder1"></script>
+</body>
+</html>

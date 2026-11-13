@@ -1,0 +1,128 @@
+/* Build Your Binder (bản thử) — dùng chung token với css/store.css (nạp trước). */
+
+.proto-banner {
+  background: #fff4ed; border: 1px solid #d5aaa6; color: var(--ink);
+  padding: 13px 16px; font-size: 12.5px; line-height: 1.7; margin-bottom: 26px;
+}
+.proto-banner b { color: var(--rs-ruby); }
+
+.binder-head {
+  display: flex; justify-content: space-between; align-items: end; gap: 28px; flex-wrap: wrap;
+  padding: 24px; background: var(--panel); border: 1px solid #91a394;
+  box-shadow: 3px 4px 0 #20394d26; margin-bottom: 26px;
+}
+.binder-head .eyebrow { color: var(--rs-ruby); margin-bottom: 6px; }
+.binder-sub { color: var(--muted); font-size: 13px; line-height: 1.8; max-width: 580px; margin: 10px 0 0; }
+.binder-controls { min-width: 250px; }
+.binder-controls label { display: block; font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+.binder-controls select {
+  width: 100%; min-height: 44px; font-size: 13px; font-weight: 600;
+  border: 1px solid #bbbfb3; background: var(--panel); padding: 10px 26px 10px 12px;
+}
+.set-info { color: var(--muted); font-size: 11px; margin: 8px 0 0; line-height: 1.6; }
+
+.binder-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 24px; align-items: start; }
+@media (max-width: 960px) { .binder-layout { grid-template-columns: 1fr; } }
+
+.binder-sheet {
+  display: flex; background: var(--panel); border: 1px solid #91a394;
+  box-shadow: 3px 4px 0 #20394d26; padding: 18px 18px 18px 0;
+}
+.binder-spine {
+  flex: none; width: 38px; display: flex; flex-direction: column;
+  justify-content: space-around; align-items: center;
+  border-right: 1px dashed var(--line); margin-right: 18px;
+}
+.binder-spine i {
+  width: 17px; height: 17px; border-radius: 50%;
+  background: #ecebdc; border: 2px solid #b8bba9; box-shadow: inset 1px 1px 0 #fff;
+}
+.binder-main { flex: 1; min-width: 0; }
+
+.pockets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.pocket {
+  position: relative; display: flex; flex-direction: column; gap: 6px;
+  background: #f7f5ea; border: 1px solid #c7ccbf; padding: 8px;
+  text-align: left; font: inherit; color: inherit; width: 100%;
+}
+button.pocket { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+button.pocket:hover { border-color: #899d8e; box-shadow: 3px 4px 0 #d4d8c8; }
+.pocket.picked { border: 2px solid var(--rs-ruby); box-shadow: 2px 2px 0 #b13a4840; padding: 7px; }
+.p-badge {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  background: var(--rs-ruby); color: #fff; font-size: 9.5px; font-weight: 700;
+  padding: 3px 6px; letter-spacing: .4px;
+}
+.p-imgwrap {
+  position: relative; aspect-ratio: 5 / 7; background: #e8eddf;
+  display: grid; place-items: center; overflow: hidden;
+}
+.p-imgwrap img { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(2px 3px 2px #20394d21); }
+.pocket.off .p-imgwrap img { filter: grayscale(1); opacity: .38; }
+.p-ph { font-family: var(--font-game); font-size: 21px; color: var(--muted); text-align: center; padding: 8px; }
+.p-veil {
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  background: #20394dd9; color: #fff9e5; font-size: 9.5px; font-weight: 700;
+  padding: 3px 8px; letter-spacing: .6px; white-space: nowrap;
+}
+.p-name { font-size: 11.5px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+.p-num { color: var(--muted); font-weight: 500; }
+.p-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.p-price { color: var(--rs-ruby); font-size: 15px; font-weight: 800; }
+.p-qty { color: var(--green); font-size: 10px; white-space: nowrap; }
+.p-hint { font-size: 10px; color: var(--muted); }
+.pocket.picked .p-hint { color: var(--rs-ruby); font-weight: 700; }
+
+.pager { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 18px; flex-wrap: wrap; }
+.pager button {
+  border: 1px solid var(--ink); background: var(--panel); padding: 9px 14px;
+  min-height: 42px; font-size: 12px; font-weight: 600; box-shadow: 2px 2px 0 var(--line);
+}
+.pager button:disabled { opacity: .4; box-shadow: none; }
+#page-label { font-family: var(--font-game); font-size: 21px; }
+
+.tray {
+  background: var(--panel); border: 1px solid #91a394; box-shadow: 3px 4px 0 #20394d26;
+  padding: 20px; position: sticky; top: 118px;
+}
+@media (max-width: 960px) { .tray { position: static; } }
+.tray h3 { font-family: var(--font-game); font-size: 27px; font-weight: 400; margin: 0 0 12px; }
+.tray-progress-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 700; }
+.tray-progress-row span:last-child { color: var(--muted); font-weight: 500; }
+.progress { height: 10px; background: #e9e9dc; border: 1px solid #d3d5c4; margin-top: 7px; }
+.progress i { display: block; height: 100%; width: 0; background: var(--green); transition: width .3s; }
+.tray-note { color: var(--muted); font-size: 11px; margin: 7px 0 0; }
+.tray-list { display: grid; gap: 8px; margin: 14px 0 4px; max-height: 330px; overflow: auto; }
+.tray-row {
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+  border: 1px solid var(--line-soft); background: #fbfaf3; padding: 6px 8px;
+}
+.tray-row img { width: 38px; height: 52px; object-fit: contain; display: block; }
+.t-name { font-size: 12px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.t-sub { font-size: 10px; color: var(--muted); }
+.t-price { color: var(--rs-ruby); font-size: 13px; font-weight: 800; white-space: nowrap; }
+.t-x { border: 0; background: transparent; font-size: 17px; line-height: 1; color: var(--muted); padding: 4px; }
+.t-x:hover { color: var(--rs-ruby); }
+.tray-empty { text-align: center; padding: 12px 0 2px; }
+.tray-empty .success-img { width: 96px; height: 96px; }
+.tray-empty p { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 6px 0 0; }
+.tray .co-btn { margin-top: 12px; }
+.tray .co-btn.alt { margin-top: 8px; }
+.tray-bought {
+  margin: 12px 0 0; font-size: 12px; line-height: 1.7;
+  background: #eef5ee; border: 1px solid #b8d0b5; padding: 10px 12px;
+}
+
+@media (max-width: 640px) {
+  .binder-head { padding: 18px; }
+  .binder-controls { min-width: 0; width: 100%; }
+  .binder-sheet { padding: 12px 12px 12px 0; }
+  .binder-spine { width: 26px; margin-right: 10px; }
+  .binder-spine i { width: 12px; height: 12px; }
+  .pockets { gap: 9px; }
+  .pocket { padding: 6px; }
+  .pocket.picked { padding: 5px; }
+  .p-name { font-size: 10.5px; }
+  .p-price { font-size: 13px; }
+  .p-veil { font-size: 8.5px; }
+}
