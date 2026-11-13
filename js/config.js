@@ -4,8 +4,8 @@
  */
 (function (root) {
   'use strict';
-  root.SUPABASE_URL = 'https://ntfvcajbmmduloxbnygd.supabase.co';
-  root.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im50ZnZjYWpibW1kdWxveGJueWdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5NjA3NDAsImV4cCI6MjEwNzUzNjc0MH0.IiAZohnZZpBYWIWAUpmXpXk64GNDV0n_odYXQsfqYS0';
+  root.SUPABASE_URL = 'https://imzaonncrukxyfbeuoio.supabase.co';
+  root.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImltemFvbm5jcnVreHlmYmV1b2lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ1NTI0NjYsImV4cCI6MjExMDEyODQ2Nn0.v8G_FeZ5tXar7U8SELzuPXF07NSsWlsdedYo9m-VCxg';
   // ---- Storefront công khai (store.html) ----
   // Link liên hệ mua hàng hiện trên trang khách. Để trống = nút không hiện.
   // Zac điền link trang Facebook/Messenger (vd https://m.me/tenpage) và Zalo
