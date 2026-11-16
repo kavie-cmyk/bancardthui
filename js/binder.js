@@ -599,29 +599,133 @@
     saveEng(); renderSocial();
     return 'Đã thả tim ❤️ (+1 điểm tương tác).';
   }
-  function doShare(key, link, noteEl) {
+  // Cộng điểm chia sẻ CHỈ khi hành động chia sẻ đã xác nhận thành công.
+  // Trả về true nếu lần này được cộng điểm, false nếu đã chạm trần tuần.
+  function awardSharePoint(key) {
     var ck = key + '@' + WEEK_KEY;
-    var capped = (eng.shareCnt[ck] || 0) >= SHARE_WEEK_CAP;
-    if (!capped) {
-      eng.shareCnt[ck] = (eng.shareCnt[ck] || 0) + 1;
-      extra(key).s++;
-      saveEng();
-    }
-    copyText(link);
-    if (noteEl) {
-      noteEl.hidden = false;
-      noteEl.textContent = capped
-        ? 'Đã đạt giới hạn chia sẻ tính điểm trong tuần (' + SHARE_WEEK_CAP + ' lượt / thiết bị / binder) — đã copy link, nhưng lần chia sẻ này không cộng điểm.'
-        : 'Đã copy link binder: ' + link + ' (+3 điểm tương tác cho lượt chia sẻ tính điểm).';
-    }
-    renderSocial();
+    if ((eng.shareCnt[ck] || 0) >= SHARE_WEEK_CAP) return false;
+    eng.shareCnt[ck] = (eng.shareCnt[ck] || 0) + 1;
+    extra(key).s++;
+    saveEng();
+    return true;
   }
-  function copyText(t) {
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).catch(function () {});
-    else {
-      var ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
-      ta.select(); try { document.execCommand('copy'); } catch (e) {} ta.remove();
+  function setShareNote(noteEl, text) {
+    if (!noteEl) return;
+    noteEl.hidden = false;
+    noteEl.textContent = text;
+  }
+  // Ô copy tay: hiện link trong input readonly ngay dưới note để người dùng
+  // tự copy khi cả native share lẫn clipboard đều bị trình duyệt chặn.
+  function showManualLink(noteEl, link) {
+    if (!noteEl || !noteEl.parentNode) return;
+    var box = noteEl._shareBox;
+    if (!box) {
+      box = document.createElement('div'); box.className = 'share-manual';
+      var label = document.createElement('p'); label.className = 'tray-note share-manual-label';
+      label.textContent = '👇 Không copy tự động được — chạm vào ô dưới, bôi đen hết rồi bấm Copy để tự copy link này:';
+      var input = document.createElement('input'); input.type = 'text'; input.readOnly = true;
+      input.className = 'share-manual-input'; input.setAttribute('aria-label', 'Link binder để copy thủ công');
+      input.addEventListener('focus', function () { input.select(); });
+      input.addEventListener('click', function () { input.focus(); input.select(); });
+      box.appendChild(label); box.appendChild(input);
+      noteEl.parentNode.insertBefore(box, noteEl.nextSibling);
+      noteEl._shareBox = box; box._input = input;
     }
+    box.hidden = false;
+    box._input.value = link;
+    if (box.scrollIntoView) { try { box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {} }
+  }
+  function hideManualLink(noteEl) { if (noteEl && noteEl._shareBox) noteEl._shareBox.hidden = true; }
+  // Copy clipboard, trả Promise<boolean>: true CHỈ khi copy thật sự thành công
+  // (clipboard API resolve, hoặc execCommand fallback trả true). Mọi lỗi đều
+  // được trả về cho caller xử lý — KHÔNG nuốt lỗi rồi báo thành công giả nữa.
+  function copyText(t) {
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = t; ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0'; ta.style.opacity = '0.01';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        try { ta.setSelectionRange(0, ta.value.length); } catch (e) {}
+        var ok = false;
+        try { ok = !!document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove();
+        return ok;
+      } catch (e) { return false; }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(t).then(function () { return true; }, function () { return fallback(); });
+    }
+    return Promise.resolve(fallback());
+  }
+  function doShare(key, link, noteEl) {
+    if (!link) {
+      setShareNote(noteEl, 'Chưa tạo được link chia sẻ cho binder này. Hãy thử lại sau khi binder tải xong.');
+      return Promise.resolve(false);
+    }
+    function finish(ok, how) {
+      if (ok) {
+        hideManualLink(noteEl);
+        var awarded = awardSharePoint(key);
+        setShareNote(noteEl, awarded
+          ? (how === 'share'
+            ? 'Đã chia sẻ qua hộp thoại chia sẻ (+3 điểm tương tác cho lượt chia sẻ tính điểm). Link binder: ' + link
+            : 'Đã copy link binder: ' + link + ' (+3 điểm tương tác cho lượt chia sẻ tính điểm).')
+          : 'Đã đạt giới hạn chia sẻ tính điểm trong tuần (' + SHARE_WEEK_CAP + ' lượt / thiết bị / binder) — ' +
+            (how === 'share' ? 'đã chia sẻ' : 'đã copy link') + ', nhưng lần chia sẻ này không cộng điểm. Link binder: ' + link);
+      }
+      renderSocial();
+      return ok;
+    }
+    function copyPath() {
+      return copyText(link).then(function (ok) {
+        if (!ok) {
+          // Không cộng điểm, không báo "đã copy": đưa link ra ô copy tay.
+          setShareNote(noteEl, 'Chưa copy tự động được (trình duyệt đã chặn quyền clipboard). Link binder của bạn ở ô ngay bên dưới — hãy tự copy rồi dán vào nơi muốn chia sẻ. Lần này chưa cộng điểm vì chưa xác nhận được việc copy.');
+          showManualLink(noteEl, link);
+          renderSocial();
+          return false;
+        }
+        return finish(true, 'copy');
+      }, function () {
+        setShareNote(noteEl, 'Chưa copy tự động được (trình duyệt đã chặn quyền clipboard). Link binder của bạn ở ô ngay bên dưới — hãy tự copy rồi dán vào nơi muốn chia sẻ. Lần này chưa cộng điểm vì chưa xác nhận được việc copy.');
+        showManualLink(noteEl, link);
+        renderSocial();
+        return false;
+      });
+    }
+    // Ưu tiên hộp thoại chia sẻ thật khi trình duyệt có.
+    if (typeof navigator.share === 'function') {
+      var data = { title: 'Build Your Binder — Bán Card Thui', text: 'Xem binder Pokémon TCG của mình nè!', url: link };
+      var can = true;
+      try { if (typeof navigator.canShare === 'function') can = navigator.canShare(data); } catch (e) { can = false; }
+      if (can) {
+        return navigator.share(data).then(function () { return finish(true, 'share'); }, function (err) {
+          if (err && err.name === 'AbortError') {
+            // Người dùng tự huỷ hộp thoại: KHÔNG cộng điểm, note trung tính.
+            hideManualLink(noteEl);
+            setShareNote(noteEl, 'Bạn đã đóng hộp thoại chia sẻ trước khi chia sẻ xong — không sao cả, lần này không cộng điểm. Bấm Chia sẻ lại khi bạn sẵn sàng nhé.');
+            renderSocial();
+            return false;
+          }
+          // Lỗi khác (bị chặn / không hỗ trợ dữ liệu): lùi về đường copy.
+          return copyPath();
+        });
+      }
+    }
+    return copyPath();
+  }
+  // Bọc mọi điểm bấm chia sẻ: tạo link lỗi (buildShareLink ném exception)
+  // cũng phải hiện note rõ ràng thay vì "bấm như không có gì xảy ra".
+  function tryShare(key, linkOrFn, noteEl) {
+    var link;
+    try { link = (typeof linkOrFn === 'function') ? linkOrFn() : linkOrFn; }
+    catch (e) {
+      setShareNote(noteEl, 'Không tạo được link chia sẻ lúc này (' + (e && e.message ? e.message : 'lỗi không rõ') + '). Hãy thử tải lại trang rồi bấm Chia sẻ lại.');
+      return Promise.resolve(false);
+    }
+    return doShare(key, link, noteEl);
   }
 
   // ---------- leaderboard / cộng đồng / featured / thử thách ----------
@@ -749,7 +853,7 @@
         sample: true, shopPick: sm.shopPick, likes: e.likes,
         onView: function () { openSampleView(sm); },
         onLike: function () { var m = doLike(sm.key, false); els.publishNote.hidden = false; els.publishNote.textContent = m; },
-        onShare: function () { doShare(sm.key, location.origin + location.pathname + '#mau=' + sm.key, els.publishNote); els.publishNote.hidden = false; }
+        onShare: function () { els.publishNote.hidden = false; tryShare(sm.key, function () { return location.origin + location.pathname + '#mau=' + sm.key; }, els.publishNote); }
       });
       els.community.appendChild(el);
     });
@@ -763,7 +867,7 @@
         likes: me.likes, likeDisabled: true,
         onView: function () { openView({ key: 'me', owner: state.name || 'Bạn', cards: picks, isSelf: true }); },
         onLike: function () {},
-        onShare: function () { doShare('me', buildShareLink(), els.publishNote); els.publishNote.hidden = false; }
+        onShare: function () { els.publishNote.hidden = false; tryShare('me', buildShareLink, els.publishNote); }
       });
       el2.classList.add('mine');
       els.community.appendChild(el2);
@@ -779,14 +883,14 @@
       var e1 = sampleEng(botw);
       var c1 = binderCardEl('🏆 Binder of the Week (mẫu) — ' + botw.owner, sampleCards(botw),
         'Điểm tương tác cao nhất tuần (mẫu): ' + samplePoints(botw) + ' điểm · 💎 ' + fmt(botw.value) + ' (mẫu) · ❤️ ' + e1.likes,
-        { sample: true, likes: e1.likes, onView: function () { openSampleView(botw); }, onLike: function () { doLike(botw.key, false); }, onShare: function () { doShare(botw.key, location.origin + location.pathname + '#mau=' + botw.key, els.publishNote); els.publishNote.hidden = false; } });
+        { sample: true, likes: e1.likes, onView: function () { openSampleView(botw); }, onLike: function () { doLike(botw.key, false); }, onShare: function () { els.publishNote.hidden = false; tryShare(botw.key, function () { return location.origin + location.pathname + '#mau=' + botw.key; }, els.publishNote); } });
       els.featured.appendChild(c1);
     }
     if (pick) {
       var e2 = sampleEng(pick);
       var c2 = binderCardEl('⭐ Shop chọn — ' + pick.owner, sampleCards(pick),
         'Shop chấm vì sáng tạo / đúng vibe chủ đề “' + THEME.title + '” (mẫu) · 💎 ' + fmt(pick.value) + ' (mẫu) · ❤️ ' + e2.likes,
-        { sample: true, shopPick: true, likes: e2.likes, onView: function () { openSampleView(pick); }, onLike: function () { doLike(pick.key, false); }, onShare: function () { doShare(pick.key, location.origin + location.pathname + '#mau=' + pick.key, els.publishNote); els.publishNote.hidden = false; } });
+        { sample: true, shopPick: true, likes: e2.likes, onView: function () { openSampleView(pick); }, onLike: function () { doLike(pick.key, false); }, onShare: function () { els.publishNote.hidden = false; tryShare(pick.key, function () { return location.origin + location.pathname + '#mau=' + pick.key; }, els.publishNote); } });
       els.featured.appendChild(c2);
     }
   }
@@ -876,8 +980,15 @@
   });
   els.sharedShare.addEventListener('click', function () {
     if (!viewCtx) return;
-    var link = viewCtx.key === 'me' ? buildShareLink() : location.origin + location.pathname + '#mau=' + viewCtx.key;
-    doShare(viewCtx.key, link, els.sharedNote);
+    var ctx = viewCtx;
+    tryShare(ctx.key, function () {
+      if (ctx.key === 'me') return buildShareLink();
+      // Binder mở từ link #b= (key 'shr-…'): chia sẻ lại chính URL #b= hiện tại.
+      // Trước đây nhánh này luôn ghép '#mau=' + key → link '#mau=shr-…' mà đầu
+      // nhận không hiểu (#mau chỉ nhận s1..s5) nên người nhận mở ra không thấy gì.
+      if (ctx.key.indexOf('shr-') === 0) return location.href;
+      return location.origin + location.pathname + '#mau=' + ctx.key;
+    }, els.sharedNote);
   });
   els.sharedMine.addEventListener('click', function () {
     els.sharedView.hidden = true;
@@ -1174,7 +1285,7 @@
     saveState(); renderSocial();
   });
   els.shareBtn.addEventListener('click', function () {
-    doShare('me', buildShareLink(), els.shareNote);
+    tryShare('me', buildShareLink, els.shareNote);
   });
   els.publishBtn.addEventListener('click', function () {
     state.published = !state.published;
