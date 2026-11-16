@@ -23,7 +23,7 @@
 
   /* ---------- auth: magic link ---------- */
   function chromeVisible(on) {
-    ['nav', 'btn-export', 'btn-logout'].forEach(function (id) {
+    ['nav', 'btn-store', 'btn-export', 'btn-logout'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.hidden = !on;
     });
@@ -210,6 +210,7 @@
 
   function renderNav(active) {
     document.getElementById('nav').hidden = false;
+    var store0 = document.getElementById('btn-store'); if (store0) store0.hidden = false;
     var exp0 = document.getElementById('btn-export'); if (exp0) exp0.hidden = false;
     var lob = document.getElementById('btn-logout');
     if (lob) {

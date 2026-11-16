@@ -39,6 +39,8 @@ h1, h2, h3, p { margin-top: 0; }
 .shop-nav { display: flex; gap: 24px; align-items: center; }
 .shop-nav a { text-decoration: none; font-size: 13px; font-weight: 600; padding: 8px 0; }
 .shop-nav a:hover { color: var(--rs-ruby); }
+.shop-kho-link { display: inline-flex; align-items: center; gap: 6px; background: var(--panel); padding: 9px 12px; border: 1px solid var(--ink); box-shadow: 2px 2px 0 var(--line); font-size: 12px; font-weight: 600; min-height: 42px; text-decoration: none; white-space: nowrap; }
+.shop-kho-link:hover { color: var(--rs-ruby); }
 .shop-contact { display: flex; gap: 8px; }
 .shop-contact:empty { display: none; }
 .contact-btn { font-size: 11px; font-weight: 600; text-decoration: none; padding: 8px; border-bottom: 1px solid var(--line); }
@@ -236,6 +238,7 @@ h2 { font-family: var(--font-game); font-size: 34px; line-height: 1.1; font-weig
   .shop-wrap { padding: 18px 12px 22px; }
   .header-cart { padding: 7px 9px; font-size: 10px; gap: 6px; }
   .header-cart svg { width: 16px; }
+  .shop-kho-link { padding: 7px 9px; font-size: 11px; min-height: 38px; }
   .shop-name { font-size: 27px; }
   .shop-hero { grid-template-columns: minmax(0, 1fr) 100px; gap: 12px; padding: 24px 14px; }
   .hero-copy .eyebrow { font-size: 7px; letter-spacing: .5px; gap: 5px; }

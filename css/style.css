@@ -79,6 +79,8 @@ body {
   border-radius: 9px; padding: 7px 12px; font-size: 13px; cursor: pointer; font-family: var(--font-body);
 }
 .btn-ghost:hover { color: var(--ink); border-color: var(--gold-dim); }
+a.btn-ghost { text-decoration: none; display: inline-flex; align-items: center; white-space: nowrap; }
+a.btn-ghost[hidden] { display: none; }
 
 /* ---------- layout ---------- */
 .wrap { max-width: 1180px; margin: 0 auto; padding: 30px 22px 80px; }
