@@ -180,6 +180,9 @@
   }
 
   // ---------- giá thật: Cardmarket trend qua TCGdex ----------
+  // Giá fetch cho MỌI lá đã vào binder (kể cả mơ ước — hiện giá tham khảo mờ,
+  // KHÔNG tính tổng) và cho 9 lá đang hiện trên lưới. Trước đây chỉ fetch lá
+  // đã xác thực nên lá mơ ước + lưới set không bao giờ hiện giá thật.
   function ensurePrice(pick) {
     if (priceState[pick.id]) return;
     priceState[pick.id] = { st: 'loading', vnd: 0 };
@@ -194,7 +197,10 @@
         else priceState[pick.id] = { st: 'none', vnd: 0 };
       })
       .catch(function () { priceState[pick.id] = { st: 'none', vnd: 0 }; })
-      .then(function () { renderTray(); renderSocial(); });
+      .then(function () {
+        renderTray(); renderSocial();
+        if (cur.cards.some(function (c) { return c.id === pick.id; })) { renderPockets(); renderSuggest(); }
+      });
   }
   function myValue() {
     var total = 0;
@@ -209,7 +215,9 @@
     var ps = priceState[pick.id];
     var card = cardReg[pick.id];
     var sample = card && card.stock ? card.stock.price : null;
-    if (ps && ps.st === 'ok') return { text: fmt(ps.vnd), note: 'Cardmarket trend · TCGdex' };
+    if (ps && ps.st === 'ok') return isVerified(pick.st)
+      ? { text: fmt(ps.vnd), note: 'Cardmarket trend · TCGdex' }
+      : { text: fmt(ps.vnd), note: 'giá tham khảo · Cardmarket trend · TCGdex (không tính tổng)' };
     if (ps && ps.st === 'loading') return { text: 'Đang lấy giá…', note: 'Cardmarket trend · TCGdex' };
     if (sample != null) return { text: fmt(sample), note: 'giá mẫu (không tính tổng)' };
     return { text: 'Chưa có giá', note: 'chưa có giá Cardmarket' };
@@ -281,6 +289,7 @@
   function renderPockets() {
     els.pockets.innerHTML = '';
     var slice = cur.cards.slice(cur.page * PAGE_SIZE, cur.page * PAGE_SIZE + PAGE_SIZE);
+    slice.forEach(function (card) { ensurePrice(card); });
     slice.forEach(function (card) {
       var pick = findPick(card.setId, card.id);
       var el = document.createElement('div');
@@ -319,12 +328,19 @@
       name.appendChild(num); name.appendChild(document.createTextNode(card.name));
       main.appendChild(name);
       var foot = document.createElement('div'); foot.className = 'p-foot';
+      var ps = priceState[card.id];
+      if (ps && ps.st === 'ok') {
+        var rp = document.createElement('span'); rp.className = 'p-price'; rp.textContent = fmt(ps.vnd);
+        var rs = document.createElement('span'); rs.className = 'p-qty'; rs.textContent = 'Cardmarket';
+        foot.appendChild(rp); foot.appendChild(rs);
+      }
       if (card.stock) {
         var price = document.createElement('span'); price.className = 'p-price'; price.textContent = fmt(card.stock.price);
         var qty = document.createElement('span'); qty.className = 'p-qty'; qty.textContent = 'Còn ' + card.stock.qty + ' (mẫu)';
         foot.appendChild(price); foot.appendChild(qty);
-      } else {
-        var dash = document.createElement('span'); dash.className = 'p-hint'; dash.textContent = 'Chưa có hàng (mẫu)';
+      } else if (!(ps && ps.st === 'ok')) {
+        var dash = document.createElement('span'); dash.className = 'p-hint';
+        dash.textContent = (ps && ps.st === 'loading') ? 'Đang lấy giá…' : 'Chưa có hàng (mẫu)';
         foot.appendChild(dash);
       }
       main.appendChild(foot);
@@ -386,7 +402,7 @@
   // ---------- khay binder ----------
   function renderTray() {
     var picks = allPicks();
-    picks.forEach(function (p) { if (isVerified(p.st)) ensurePrice(p); });
+    picks.forEach(function (p) { ensurePrice(p); });
     var verified = picks.filter(function (p) { return isVerified(p.st); });
     var dream = picks.filter(function (p) { return p.st === 'dream'; });
     var pending = picks.filter(function (p) { return p.st === 'buy-pending'; });
@@ -498,13 +514,15 @@
     return out.slice(0, 6);
   }
   function sugRow(card, reason) {
+    ensurePrice(card);
     var row = document.createElement('div'); row.className = 'sug-row';
     var img = document.createElement('img'); img.src = card.img + '/low.webp'; img.alt = ''; img.loading = 'lazy';
     row.appendChild(img);
     var mid = document.createElement('div');
     var nm = document.createElement('div'); nm.className = 't-name'; nm.textContent = '#' + card.localId + ' ' + card.name;
     var sub = document.createElement('div'); sub.className = 't-sub';
-    sub.textContent = reason + (card.stock ? ' · Shop có hàng (mẫu) ' + fmt(card.stock.price) : ' · Shop chưa có (mẫu)');
+    var sugPs = priceState[card.id];
+    sub.textContent = reason + (sugPs && sugPs.st === 'ok' ? ' · Giá Cardmarket ' + fmt(sugPs.vnd) : '') + (card.stock ? ' · Shop có hàng (mẫu) ' + fmt(card.stock.price) : ' · Shop chưa có (mẫu)');
     mid.appendChild(nm); mid.appendChild(sub); row.appendChild(mid);
     var add = document.createElement('button'); add.type = 'button'; add.className = 'mini-btn';
     add.textContent = '+ Mơ ước';
@@ -1108,7 +1126,7 @@
     els.select.appendChild(o);
   });
   els.name.value = state.name || '';
-  allPicks().forEach(function (p) { if (isVerified(p.st)) ensurePrice(p); });
+  allPicks().forEach(function (p) { ensurePrice(p); });
   loadSet(SETS[0]);
   // Nạp nền các set còn lại để gallery cộng đồng + khay đa set có dữ liệu.
   SETS.slice(1).forEach(function (s) { fetchSetData(s).catch(function () {}); });
