@@ -67,7 +67,7 @@
     d.setDate(d.getDate() + (6 - day));
     return d;
   }
-  function fmtDate(d) { return d.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }); }
+  function fmtDate(d) { return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
 
   var THEMES = [
     { title: 'Binder hệ Lửa', desc: 'Toàn những lá rực lửa — Charizard, Arcanine hay bất cứ lá Lửa nào bạn mê. Tự diễn giải theo cách của bạn!', kw: ['charmander', 'charmeleon', 'charizard', 'flareon', 'vulpix', 'ninetales', 'growlithe', 'arcanine', 'ponyta', 'rapidash', 'magmar', 'moltres', 'entei', 'torchic', 'combusken', 'blaziken'] },
@@ -123,6 +123,12 @@
   function samplePoints(sm) { var e = sampleEng(sm); return pointsOf(e.wkLikes, e.wkShares, e.wkViews); }
   function myEng() { var ex = extra('me'); return { likes: ex.l, wkLikes: ex.l, wkShares: ex.s, wkViews: ex.v }; }
   function myPoints() { var e = myEng(); return pointsOf(e.wkLikes, e.wkShares, e.wkViews); }
+  function wkViewsOf(key) {
+    if (key === 'me') return myEng().wkViews;
+    var sm = SAMPLES.filter(function (s) { return s.key === key; })[0];
+    if (sm) return sampleEng(sm).wkViews;
+    return extra(key).v;
+  }
 
   // ---------- helpers ----------
   function fmt(n) { return Math.round(n).toLocaleString('vi-VN') + '₫'; }
@@ -543,15 +549,19 @@
   }
   function doShare(key, link, noteEl) {
     var ck = key + '@' + WEEK_KEY;
-    if ((eng.shareCnt[ck] || 0) >= SHARE_WEEK_CAP) {
-      if (noteEl) { noteEl.hidden = false; noteEl.textContent = 'Đã đạt trần chia sẻ tính điểm tuần này (' + SHARE_WEEK_CAP + ' lượt / thiết bị) — vẫn copy được link, chỉ không cộng thêm điểm.'; }
-    } else {
+    var capped = (eng.shareCnt[ck] || 0) >= SHARE_WEEK_CAP;
+    if (!capped) {
       eng.shareCnt[ck] = (eng.shareCnt[ck] || 0) + 1;
       extra(key).s++;
       saveEng();
     }
     copyText(link);
-    if (noteEl) { noteEl.hidden = false; noteEl.textContent = 'Đã copy link binder: ' + link + ' (+3 điểm tương tác cho lượt chia sẻ tính điểm).'; }
+    if (noteEl) {
+      noteEl.hidden = false;
+      noteEl.textContent = capped
+        ? 'Đã đạt giới hạn chia sẻ tính điểm trong tuần (' + SHARE_WEEK_CAP + ' lượt / thiết bị / binder) — đã copy link, nhưng lần chia sẻ này không cộng điểm.'
+        : 'Đã copy link binder: ' + link + ' (+3 điểm tương tác cho lượt chia sẻ tính điểm).';
+    }
     renderSocial();
   }
   function copyText(t) {
@@ -588,7 +598,7 @@
       '<p class="tray-note">📜 <b>Luật chơi:</b> chủ đề <b>mở</b> — shop chỉ ra chủ đề, bạn <b>tự diễn giải</b> bằng binder của mình, <b>không có danh sách lá bắt buộc</b>. ' +
       'Đăng binder lên cộng đồng + tham gia thử thách, rồi kiếm <b>điểm tương tác</b>: ❤️ tim ×1 · 🔗 chia sẻ ×3 · 👀 lượt xem ×0,2 ' +
       '(chống farm: 1 lượt xem / thiết bị / binder / tuần; điểm lượt xem tối đa ' + VIEW_POINTS_CAP + ' điểm / binder; chia sẻ tính điểm tối đa ' + SHARE_WEEK_CAP + ' lượt / thiết bị / tuần). ' +
-      'Mốc chốt: <b>' + fmtDate(end) + '</b> (Chủ nhật). 🎁 Phần thưởng <b>(mẫu)</b>: Binder of the Week được ghim featured trên store + quà của shop; thêm giải ⭐ Shop chọn do shop chấm riêng.</p></div>';
+      'Chốt điểm: <b>23:59 Chủ nhật tuần này (' + fmtDate(end) + ')</b>. 🎁 Phần thưởng <b>(mẫu)</b>: Binder of the Week được ghim featured trên store + quà của shop; thêm giải ⭐ Shop chọn do shop chấm riêng.</p></div>';
     if (state.joined) {
       var e = myEng();
       html += '<div class="challenge-join done">✅ Binder của bạn <b>đang tham gia</b> thử thách tuần này · Điểm tương tác: <b>' + myPoints() + ' điểm</b> ' +
@@ -681,7 +691,7 @@
     els.community.innerHTML = '';
     SAMPLES.forEach(function (sm) {
       var e = sampleEng(sm);
-      var meta = '💎 ' + fmt(sm.value) + ' (mẫu) · ✓ ' + sm.verified + ' lá thật · 📚 ' + sm.pct + '%' +
+      var meta = '💎 ' + fmt(sm.value) + ' (mẫu) · ✓ ' + sm.verified + ' lá thật · 📚 ' + sm.pct + '% · ❤️ ' + e.likes + ' tim' +
         (sm.joined ? ' · 🏆 Điểm tương tác tuần: ' + samplePoints(sm) + ' (❤️ ' + e.wkLikes + ' · 🔗 ' + e.wkShares + ' · 👀 ' + e.wkViews + ' — số mẫu)' : ' · Chưa tham gia thử thách tuần');
       var el = binderCardEl(sm.owner, sampleCards(sm), meta, {
         sample: true, shopPick: sm.shopPick, likes: e.likes,
@@ -695,7 +705,7 @@
       var me = myEng();
       var picks = allPicks();
       var cards = picks.map(function (p) { return { img: p.img, name: p.name }; });
-      var meta2 = '💎 ' + fmt(myValue()) + ' · ✓ ' + picks.filter(function (p) { return isVerified(p.st); }).length + ' lá thật · ○ ' + picks.filter(function (p) { return p.st === 'dream'; }).length + ' mơ ước' +
+      var meta2 = '💎 ' + fmt(myValue()) + ' · ✓ ' + picks.filter(function (p) { return isVerified(p.st); }).length + ' lá thật · ○ ' + picks.filter(function (p) { return p.st === 'dream'; }).length + ' mơ ước · 📚 ' + myPct() + '% · ❤️ ' + me.likes + ' tim' +
         (state.joined ? ' · 🏆 Điểm tương tác tuần: ' + myPoints() + ' (❤️ ' + me.wkLikes + ' · 🔗 ' + me.wkShares + ' · 👀 ' + me.wkViews + ')' : ' · Chưa tham gia thử thách tuần');
       var el2 = binderCardEl(state.name || 'Bạn', cards, meta2, {
         likes: me.likes, likeDisabled: true,
@@ -733,6 +743,7 @@
   var viewCtx = null;
   function openView(ctx) {
     viewCtx = ctx;
+    var viewCapped = wkViewsOf(ctx.key) * 0.2 >= VIEW_POINTS_CAP;
     var counted = countView(ctx.key, !!ctx.isSelf);
     els.sharedView.hidden = false;
     els.sharedTitle.textContent = '🔗 Binder của ' + ctx.owner + ' — chỉ xem';
@@ -754,7 +765,7 @@
     });
     if (!ctx.cards || !ctx.cards.length) grid.innerHTML = '<p class="tray-note">Binder này chưa có lá nào (hoặc lá chưa tải xong).</p>';
     els.sharedBody.appendChild(grid);
-    els.sharedNote.textContent = (counted ? '👀 Đã tính 1 lượt xem cho binder này (+0,2 điểm, tối đa 1 lượt / thiết bị / tuần). ' : '') +
+    els.sharedNote.textContent = (counted && viewCapped ? '👀 Đã tính 1 lượt xem cho binder này, nhưng binder đã đạt trần điểm lượt xem (' + VIEW_POINTS_CAP + ' điểm) — lần này không cộng thêm điểm. ' : counted ? '👀 Đã tính 1 lượt xem cho binder này (+0,2 điểm, tối đa 1 lượt / thiết bị / tuần). ' : '') +
       (ctx.isSelf ? 'Đây là binder của chính bạn trên thiết bị này — không tự thả tim / tính lượt xem được.' : 'Thả tim ❤️ +1 điểm · Chia sẻ 🔗 +3 điểm cho binder này.');
     els.sharedLike.disabled = !!ctx.isSelf;
     els.sharedView.scrollIntoView({ block: 'start', behavior: 'smooth' });
