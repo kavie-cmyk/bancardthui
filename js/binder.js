@@ -137,13 +137,16 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function hash(str) { var h = 2166136261; for (var i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 16777619) >>> 0; } return h; }
   function simStock(card) {
-    var h = hash(card.id);
+    // Hash là số KHÔNG DẤU — phải dùng >>> (dịch không dấu). Dùng >> (dịch có
+    // dấu) khiến lá có hash >= 2^31 cho tồn/giá ÂM (vd Eevee sv03.5-133 từng
+    // ra -75.000₫, "Còn -1").
+    var h = hash(card.id) >>> 0;
     if (h % 100 >= 40) return null;
-    var qty = 1 + ((h >> 8) % 4);
-    var tier = (h >> 16) % 100, r = (h >> 5) % 25, price;
+    var qty = 1 + ((h >>> 8) % 4);
+    var tier = (h >>> 16) % 100, r = (h >>> 5) % 25, price;
     if (tier < 55) price = 15000 + r * 5000;
-    else if (tier < 85) price = 150000 + ((h >> 5) % 20) * 25000;
-    else price = 700000 + ((h >> 5) % 12) * 250000;
+    else if (tier < 85) price = 150000 + ((h >>> 5) % 20) * 25000;
+    else price = 700000 + ((h >>> 5) % 12) * 250000;
     return { qty: qty, price: Math.round(price / 1000) * 1000 };
   }
   var ST_LABEL = {
