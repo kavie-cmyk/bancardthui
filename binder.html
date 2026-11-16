@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/store.css?v=20261024-shop6">
-<link rel="stylesheet" href="css/binder.css?v=20261116-binder3">
+<link rel="stylesheet" href="css/binder.css?v=20261116-binder4">
 </head>
 <body>
 <div class="shop-backdrop" aria-hidden="true"></div>
@@ -81,6 +81,11 @@
     <section class="binder-sheet" aria-label="Trang binder">
       <div class="binder-spine" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="binder-main">
+        <div class="binder-total" id="binder-total" aria-label="Tổng giá binder của bạn">
+          <span class="bt-label">Tổng giá binder (giá shop nếu có hàng, còn lại giá thị trường)</span>
+          <b class="binder-total-val" id="binder-total-val">0₫</b>
+          <span class="binder-total-note" id="binder-total-note">Đang tính…</span>
+        </div>
         <div id="binder-state" class="shop-state" role="status" aria-live="polite">Đang tải lá của set…</div>
         <div id="pockets" class="pockets"></div>
         <div class="pager" id="pager" hidden>
@@ -107,6 +112,8 @@
         <div class="tstat"><span>○ Lá mơ ước</span><b id="stat-dream">0</b></div>
         <div class="tstat"><span>🚚 Đang về binder</span><b id="stat-pending">0</b></div>
         <div class="tstat gold"><span>💎 Giá trị binder (chỉ lá thật)</span><b id="stat-value">0₫</b></div>
+        <div class="tstat total"><span>🧮 Tổng giá binder (giá shop nếu có hàng, còn lại giá thị trường)</span><b id="stat-total">0₫</b></div>
+        <p class="tray-note" id="stat-total-note"></p>
         <p class="tray-note" id="stat-value-note">Định giá theo MỘT nguồn duy nhất: Cardmarket trend (qua TCGdex) × tỉ giá EUR→VND trong js/config.js của shop. KHÔNG gộp Cardmarket + TCGplayer. Lá thật chưa có giá Cardmarket thì hiện “chưa có giá” / “giá mẫu” và KHÔNG tính vào tổng.</p>
       </div>
       <div id="tray-list" class="tray-list"></div>
@@ -190,6 +197,6 @@
 <script src="js/config.js?v=20261116-binder3"></script>
 <script src="js/pricing.js?v=20261116-binder3"></script>
 <script src="js/cardmatch.js?v=20261116-binder3"></script>
-<script src="js/binder.js?v=20261116-binder5"></script>
+<script src="js/binder.js?v=20261116-binder6"></script>
 </body>
 </html>

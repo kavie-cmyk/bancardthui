@@ -44,6 +44,8 @@
     sharedView: $('shared-view'), sharedTitle: $('shared-title'), sharedBody: $('shared-body'),
     sharedLike: $('shared-like'), sharedShare: $('shared-share'), sharedMine: $('shared-mine'),
     sharedNote: $('shared-note'),
+    totalBar: $('binder-total'), totalBarVal: $('binder-total-val'), totalBarNote: $('binder-total-note'),
+    statTotal: $('stat-total'), statTotalNote: $('stat-total-note'),
     scanPanel: $('scan-panel'), scanStatus: $('scan-status'), scanOcr: $('scan-ocr-text'),
     scanCands: $('scan-cands'), scanSim: $('scan-sim'), scanClose: $('scan-close')
   };
@@ -150,6 +152,44 @@
   };
   function isVerified(st) { return st === 'verified-scan' || st === 'verified-buy'; }
 
+  // ---------- giá HIỂN THỊ ở màn xem binder (khác "Giá trị binder" leaderboard) ----------
+  // Ưu tiên: shop CÓ HÀNG -> giá shop (mẫu); KHÔNG có hàng -> giá thị trường
+  // Cardmarket trend (TCGdex). Tồn kho mẫu là tất định theo id (simStock) nên
+  // tra được ngay cả khi set chưa tải xong.
+  function stockForId(id) {
+    var c = cardReg[id];
+    if (c) return c.stock;
+    return simStock({ id: id });
+  }
+  function displayPrice(id) {
+    var st = stockForId(id);
+    if (st) return { kind: 'shop', vnd: st.price, qty: st.qty };
+    var ps = priceState[id];
+    if (ps && ps.st === 'ok') return { kind: 'market', vnd: ps.vnd };
+    if (ps && ps.st === 'loading') return { kind: 'loading' };
+    return { kind: 'none' };
+  }
+  function displayPriceText(id) {
+    var d = displayPrice(id);
+    if (d.kind === 'shop') return { text: fmt(d.vnd), label: 'Giá shop (mẫu) · Còn ' + d.qty };
+    if (d.kind === 'market') return { text: fmt(d.vnd), label: 'Giá thị trường · Cardmarket · TCGdex' };
+    if (d.kind === 'loading') return { text: 'Đang lấy giá thị trường…', label: 'Giá thị trường · Cardmarket · TCGdex' };
+    return { text: 'Chưa có giá thị trường', label: 'Giá thị trường · Cardmarket · TCGdex' };
+  }
+  // Tổng giá HIỂN THỊ của 1 binder: cộng giá đang hiển thị của mọi lá
+  // (giá shop nếu có hàng, còn lại giá thị trường). Lá chưa có giá nào -> không tính.
+  function displayTotal(items) {
+    var total = 0, priced = 0, unpriced = 0;
+    (items || []).forEach(function (it) {
+      if (!it || !it.id) { unpriced++; return; }
+      var d = displayPrice(it.id);
+      if (d.kind === 'shop' || d.kind === 'market') { total += d.vnd; priced++; }
+      else unpriced++;
+    });
+    return { total: total, priced: priced, unpriced: unpriced };
+  }
+  var TOTAL_LABEL = 'Tổng giá binder (giá shop nếu có hàng, còn lại giá thị trường)';
+
   var cache = {};
   var cardReg = {};
   var cur = { set: SETS[0], cards: [], page: 0 };
@@ -198,7 +238,7 @@
       })
       .catch(function () { priceState[pick.id] = { st: 'none', vnd: 0 }; })
       .then(function () {
-        renderTray(); renderSocial();
+        renderTray(); renderSocial(); updateSharedPrices();
         if (cur.cards.some(function (c) { return c.id === pick.id; })) { renderPockets(); renderSuggest(); }
       });
   }
@@ -212,15 +252,11 @@
     return total;
   }
   function priceLine(pick) {
-    var ps = priceState[pick.id];
-    var card = cardReg[pick.id];
-    var sample = card && card.stock ? card.stock.price : null;
-    if (ps && ps.st === 'ok') return isVerified(pick.st)
-      ? { text: fmt(ps.vnd), note: 'Cardmarket trend · TCGdex' }
-      : { text: fmt(ps.vnd), note: 'giá tham khảo · Cardmarket trend · TCGdex (không tính tổng)' };
-    if (ps && ps.st === 'loading') return { text: 'Đang lấy giá…', note: 'Cardmarket trend · TCGdex' };
-    if (sample != null) return { text: fmt(sample), note: 'giá mẫu (không tính tổng)' };
-    return { text: 'Chưa có giá', note: 'chưa có giá Cardmarket' };
+    var d = displayPrice(pick.id);
+    if (d.kind === 'shop') return { text: fmt(d.vnd), note: 'Giá shop (mẫu)' };
+    if (d.kind === 'market') return { text: fmt(d.vnd), note: 'Giá thị trường · Cardmarket · TCGdex' };
+    if (d.kind === 'loading') return { text: 'Đang lấy giá thị trường…', note: 'Giá thị trường · Cardmarket · TCGdex' };
+    return { text: 'Chưa có giá thị trường', note: 'Giá thị trường · Cardmarket · TCGdex' };
   }
 
   // ---------- tải set ----------
@@ -328,21 +364,10 @@
       name.appendChild(num); name.appendChild(document.createTextNode(card.name));
       main.appendChild(name);
       var foot = document.createElement('div'); foot.className = 'p-foot';
-      var ps = priceState[card.id];
-      if (ps && ps.st === 'ok') {
-        var rp = document.createElement('span'); rp.className = 'p-price'; rp.textContent = fmt(ps.vnd);
-        var rs = document.createElement('span'); rs.className = 'p-qty'; rs.textContent = 'Cardmarket';
-        foot.appendChild(rp); foot.appendChild(rs);
-      }
-      if (card.stock) {
-        var price = document.createElement('span'); price.className = 'p-price'; price.textContent = fmt(card.stock.price);
-        var qty = document.createElement('span'); qty.className = 'p-qty'; qty.textContent = 'Còn ' + card.stock.qty + ' (mẫu)';
-        foot.appendChild(price); foot.appendChild(qty);
-      } else if (!(ps && ps.st === 'ok')) {
-        var dash = document.createElement('span'); dash.className = 'p-hint';
-        dash.textContent = (ps && ps.st === 'loading') ? 'Đang lấy giá…' : 'Chưa có hàng (mẫu)';
-        foot.appendChild(dash);
-      }
+      var dpt = displayPriceText(card.id);
+      var rp2 = document.createElement('span'); rp2.className = 'p-price'; rp2.textContent = dpt.text;
+      var rs2 = document.createElement('span'); rs2.className = 'p-qty p-price-label'; rs2.textContent = dpt.label;
+      foot.appendChild(rp2); foot.appendChild(rs2);
       main.appendChild(foot);
       var hint = document.createElement('div'); hint.className = 'p-hint';
       hint.textContent = pick
@@ -411,6 +436,15 @@
     els.statDream.textContent = dream.length;
     els.statPending.textContent = pending.length;
     els.statValue.textContent = fmt(myValue());
+    var dt = displayTotal(picks);
+    if (els.statTotal) els.statTotal.textContent = fmt(dt.total);
+    if (els.statTotalNote) els.statTotalNote.textContent = dt.unpriced
+      ? ('Đã tính ' + dt.priced + '/' + picks.length + ' lá — ' + dt.unpriced + ' lá chưa có giá nào nên chưa tính vào tổng này.')
+      : ('Đã tính đủ ' + dt.priced + ' lá. Khác “Giá trị binder” ở trên: tổng này tính MỌI lá theo giá đang hiển thị, còn Giá trị binder chỉ tính lá ✓ đã xác thực theo Cardmarket (dùng cho Leaderboard).');
+    if (els.totalBarVal) els.totalBarVal.textContent = fmt(dt.total);
+    if (els.totalBarNote) els.totalBarNote.textContent = dt.unpriced
+      ? (dt.priced + '/' + picks.length + ' lá có giá · ' + dt.unpriced + ' lá chưa có giá (không tính vào tổng)')
+      : ('Tính đủ ' + dt.priced + ' lá trong binder của bạn');
 
     var inSet = picksOf(cur.set.id);
     els.trayCount.textContent = 'Đã chọn ' + inSet.length + ' lá (set này) · tổng ' + picks.length + ' lá';
@@ -418,7 +452,7 @@
     els.traySetpct.textContent = cur.cards.length ? ('lá thật = ' + pctSet + '% set này') : '';
     els.trayBar.style.width = Math.min(100, pctSet) + '%';
     if (!els.trayNote.textContent || !/Mô phỏng đơn/.test(els.trayNote.textContent)) {
-      els.trayNote.textContent = 'Giá trị binder chỉ tính lá ✓ đã xác thực có giá Cardmarket. Lá mơ ước hiện giá tham khảo (mờ) và không tính tiền.';
+      els.trayNote.textContent = 'Mỗi lá hiện Giá shop (mẫu) nếu shop có hàng, không thì Giá thị trường (Cardmarket · TCGdex). “Tổng giá binder” cộng giá hiển thị của mọi lá; “Giá trị binder” chỉ tính lá ✓ đã xác thực có giá Cardmarket (cho Leaderboard).';
     }
 
     els.trayList.innerHTML = '';
@@ -759,6 +793,36 @@
 
   // ---------- chế độ chỉ-xem (chia sẻ + cộng đồng) ----------
   var viewCtx = null;
+  function sharedPriceEl(c) {
+    var box = document.createElement('div'); box.className = 'p-foot shared-price';
+    box.setAttribute('data-price-for', c.id || '');
+    var t = displayPriceText(c.id);
+    var a = document.createElement('span'); a.className = 'p-price'; a.textContent = t.text;
+    var b = document.createElement('span'); b.className = 'p-qty p-price-label'; b.textContent = t.label;
+    box.appendChild(a); box.appendChild(b);
+    return box;
+  }
+  function updateSharedPrices() {
+    if (!viewCtx || els.sharedView.hidden) return;
+    var nodes = els.sharedBody.querySelectorAll('[data-price-for]');
+    Array.prototype.forEach.call(nodes, function (n) {
+      var id = n.getAttribute('data-price-for');
+      if (!id) return;
+      var t = displayPriceText(id);
+      var spans = n.querySelectorAll('span');
+      if (spans[0]) spans[0].textContent = t.text;
+      if (spans[1]) spans[1].textContent = t.label;
+    });
+    var tot = els.sharedBody.querySelector('.shared-total-val');
+    var note = els.sharedBody.querySelector('.shared-total-note');
+    if (tot) {
+      var dt = displayTotal(viewCtx.cards || []);
+      tot.textContent = fmt(dt.total);
+      if (note) note.textContent = dt.unpriced
+        ? ('Đã tính ' + dt.priced + '/' + (viewCtx.cards || []).length + ' lá — ' + dt.unpriced + ' lá chưa có giá nào nên chưa tính vào tổng.')
+        : ('Đã tính đủ ' + dt.priced + ' lá.');
+    }
+  }
   function openView(ctx) {
     viewCtx = ctx;
     var viewCapped = wkViewsOf(ctx.key) * 0.2 >= VIEW_POINTS_CAP;
@@ -766,6 +830,15 @@
     els.sharedView.hidden = false;
     els.sharedTitle.textContent = '🔗 Binder của ' + ctx.owner + ' — chỉ xem';
     els.sharedBody.innerHTML = '';
+    (ctx.cards || []).forEach(function (c) { if (c.id && c.setId) ensurePrice({ id: c.id, setId: c.setId }); });
+    var dt0 = displayTotal(ctx.cards || []);
+    var totBox = document.createElement('div'); totBox.className = 'shared-total binder-total';
+    totBox.innerHTML = '<span class="bt-label">' + TOTAL_LABEL + '</span>' +
+      '<b class="shared-total-val binder-total-val">' + fmt(dt0.total) + '</b>' +
+      '<span class="shared-total-note binder-total-note">' + (dt0.unpriced
+        ? ('Đã tính ' + dt0.priced + '/' + (ctx.cards || []).length + ' lá — ' + dt0.unpriced + ' lá chưa có giá nào nên chưa tính vào tổng.')
+        : ('Đã tính đủ ' + dt0.priced + ' lá.')) + '</span>';
+    els.sharedBody.appendChild(totBox);
     var grid = document.createElement('div'); grid.className = 'pockets shared-grid';
     (ctx.cards || []).forEach(function (c) {
       var d = document.createElement('div'); d.className = 'pocket';
@@ -775,6 +848,7 @@
       var nm = document.createElement('div'); nm.className = 'p-name';
       nm.textContent = (c.localId ? '#' + c.localId + ' · ' : '') + (c.name || '');
       d.appendChild(nm);
+      d.appendChild(sharedPriceEl(c));
       if (c.st) {
         var b = document.createElement('span'); b.className = 'p-badge st-' + c.st; b.textContent = ST_LABEL[c.st] || c.st;
         d.appendChild(b);
@@ -791,7 +865,7 @@
   function openSampleView(sm) {
     openView({
       key: sm.key, owner: sm.owner + ' (binder mẫu)',
-      cards: sampleCards(sm).map(function (c) { return { img: c.img, name: c.name, localId: c.localId, st: 'verified-buy' }; }),
+      cards: sampleCards(sm).map(function (c) { return { id: c.id, setId: c.setId, img: c.img, name: c.name, localId: c.localId, st: 'verified-buy' }; }),
       isSelf: false
     });
   }
@@ -835,7 +909,7 @@
     Promise.all(defs.map(function (d) { return fetchSetData(d).catch(function () {}); })).then(function () {
       var cards = (data.c || []).map(function (row) {
         var card = cardReg[row[1]];
-        return card ? { img: card.img, name: card.name, localId: card.localId, st: row[2] } : null;
+        return card ? { id: card.id, setId: card.setId, img: card.img, name: card.name, localId: card.localId, st: row[2] } : null;
       }).filter(Boolean);
       openView({ key: 'shr-' + data.u, owner: data.n || 'một người bạn', cards: cards, isSelf: data.u === state.uid });
     });
