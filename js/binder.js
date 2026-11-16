@@ -47,7 +47,8 @@
     totalBar: $('binder-total'), totalBarVal: $('binder-total-val'), totalBarNote: $('binder-total-note'),
     statTotal: $('stat-total'), statTotalNote: $('stat-total-note'),
     scanPanel: $('scan-panel'), scanStatus: $('scan-status'), scanOcr: $('scan-ocr-text'),
-    scanCands: $('scan-cands'), scanSim: $('scan-sim'), scanClose: $('scan-close')
+    scanCands: $('scan-cands'), scanSim: $('scan-sim'), scanClose: $('scan-close'),
+    detailPanel: $('detail-panel'), detailBody: $('detail-body'), detailClose: $('detail-close')
   };
 
   // ---------- tuần ISO + chủ đề mở ----------
@@ -241,7 +242,7 @@
       })
       .catch(function () { priceState[pick.id] = { st: 'none', vnd: 0 }; })
       .then(function () {
-        renderTray(); renderSocial(); updateSharedPrices();
+        renderTray(); renderSocial(); updateSharedPrices(); refreshDetailIfOpen(pick.id);
         if (cur.cards.some(function (c) { return c.id === pick.id; })) { renderPockets(); renderSuggest(); }
       });
   }
@@ -381,6 +382,10 @@
       el.appendChild(main);
 
       var actions = document.createElement('div'); actions.className = 'p-actions';
+      var detailBtn = document.createElement('button'); detailBtn.type = 'button'; detailBtn.className = 'mini-btn detail-btn';
+      detailBtn.textContent = 'Chi tiết';
+      detailBtn.addEventListener('click', function () { openDetail(card, {}); });
+      actions.appendChild(detailBtn);
       if (card.stock && (!pick || pick.st === 'dream')) {
         var buy = document.createElement('button'); buy.type = 'button'; buy.className = 'mini-btn buy';
         buy.textContent = '🛒 Mua tại shop';
@@ -426,6 +431,178 @@
     pick.st = 'verified-buy'; delete pick.sim;
     saveState(); ensurePrice(pick); render();
   }
+
+  // ---------- popup chi tiết lá + mua ngay tại popup (gói 2) ----------
+  // Dữ liệu giá/trạng thái tái dùng đúng các hàm hiện có: displayPriceText /
+  // displayPrice / stockForId / priceState (giá thị trường) cho khối giá, và
+  // findPick + ST_LABEL cho trạng thái của CHÍNH người xem. Hành động đi qua
+  // đúng buyCard / confirmDone / openScan / addPick sẵn có — không có luồng
+  // mua thứ hai.
+  var detailCtx = null; // {id,setId,name,img,localId,st,ev,isOther,owner}
+  function setDefFor(setId) { return SETS.filter(function (s) { return s.id === setId; })[0] || null; }
+  function langLabel(setId) {
+    var d = setDefFor(setId);
+    if (!d) return '';
+    return d.lang === 'ja' ? 'Bản Nhật (tiếng Nhật)' : 'Bản Anh (tiếng Anh)';
+  }
+  function detailCardObj(ctx) {
+    return cardReg[ctx.id] || { id: ctx.id, setId: ctx.setId, name: ctx.name, img: ctx.img, localId: ctx.localId, lang: ctx.setId ? (setDefFor(ctx.setId) || {}).lang : undefined, stock: stockForId(ctx.id) };
+  }
+  function openDetail(data, opts) {
+    if (!data || !data.id) return;
+    opts = opts || {};
+    detailCtx = {
+      id: data.id, setId: data.setId || (cardReg[data.id] && cardReg[data.id].setId) || cur.set.id,
+      name: data.name || '', img: data.img || '', localId: data.localId || '',
+      st: data.st || null, ev: data.ev || null,
+      isOther: !!opts.isOther, owner: opts.owner || ''
+    };
+    ensurePrice({ id: detailCtx.id, setId: detailCtx.setId });
+    renderDetail();
+    if (els.detailPanel) els.detailPanel.hidden = false;
+  }
+  function closeDetail() {
+    if (els.detailPanel) els.detailPanel.hidden = true;
+    detailCtx = null;
+  }
+  function refreshDetailIfOpen(id) {
+    if (detailCtx && els.detailPanel && !els.detailPanel.hidden && detailCtx.id === id) renderDetail();
+  }
+  function renderDetail() {
+    if (!detailCtx || !els.detailBody) return;
+    var ctx = detailCtx;
+    var myPick = ctx.setId ? findPick(ctx.setId, ctx.id) : null;
+    var cardObj = detailCardObj(ctx);
+    var stock = stockForId(ctx.id);
+    var body = els.detailBody;
+    body.innerHTML = '';
+
+    var wrap = document.createElement('div'); wrap.className = 'detail-imgwrap';
+    if (ctx.img) {
+      var img = document.createElement('img');
+      img.src = ctx.img + '/high.webp'; img.alt = ctx.name; img.loading = 'lazy';
+      img.addEventListener('error', function () {
+        if (!img.dataset.low) { img.dataset.low = '1'; img.src = ctx.img + '/low.webp'; return; }
+        wrap.innerHTML = ''; var ph = document.createElement('span'); ph.className = 'p-ph'; ph.textContent = ctx.name; wrap.appendChild(ph);
+      });
+      wrap.appendChild(img);
+    } else {
+      var ph2 = document.createElement('span'); ph2.className = 'p-ph'; ph2.textContent = ctx.name; wrap.appendChild(ph2);
+    }
+    var evSrc = (myPick && myPick.ev) || ctx.ev || null;
+    if (evSrc) {
+      var ev = document.createElement('img'); ev.className = 'detail-ev'; ev.src = evSrc; ev.alt = 'Ảnh chụp lá thật (bằng chứng quét)';
+      wrap.appendChild(ev);
+    }
+    body.appendChild(wrap);
+
+    var title = document.createElement('h3'); title.className = 'detail-title'; title.id = 'detail-title'; title.textContent = ctx.name;
+    body.appendChild(title);
+    var setDef = setDefFor(ctx.setId);
+    var meta = document.createElement('div'); meta.className = 'detail-meta';
+    meta.textContent = (setDef ? setDef.label : ('Set ' + ctx.setId)) + (ctx.localId ? ' · #' + ctx.localId : '') + (ctx.setId ? ' · ' + langLabel(ctx.setId) : '');
+    body.appendChild(meta);
+
+    // Huy hiệu trạng thái: bề mặt đang xem (binder người khác thì ghi rõ là
+    // của binder đó) + trạng thái trong binder CỦA MÌNH nếu khác / là của mình.
+    var badges = document.createElement('div');
+    if (ctx.isOther && ctx.st) {
+      var ob = document.createElement('span'); ob.className = 'detail-badge st-' + ctx.st;
+      ob.textContent = (ST_LABEL[ctx.st] || ctx.st) + ' · trong binder này';
+      badges.appendChild(ob);
+    }
+    if (myPick) {
+      var mb = document.createElement('span'); mb.className = 'detail-badge st-' + myPick.st;
+      mb.textContent = (ST_LABEL[myPick.st] || myPick.st) + (ctx.isOther ? ' · binder của bạn' : '') + (myPick.sim ? ' · quét mô phỏng (bản thử)' : '');
+      badges.appendChild(mb);
+    } else if (!ctx.isOther && ctx.st) {
+      var sb = document.createElement('span'); sb.className = 'detail-badge st-' + ctx.st;
+      sb.textContent = ST_LABEL[ctx.st] || ctx.st;
+      badges.appendChild(sb);
+    } else if (ctx.isOther) {
+      var nb = document.createElement('span'); nb.className = 'detail-badge st-dream';
+      nb.textContent = 'Chưa có trong binder của bạn';
+      badges.appendChild(nb);
+    }
+    if (badges.children.length) body.appendChild(badges);
+    if (evSrc) {
+      var evNote = document.createElement('p'); evNote.className = 'tray-note';
+      evNote.textContent = 'Ảnh nhỏ ở góc ảnh lớn là ảnh chụp lá thật (bằng chứng quét) của lá này.';
+      body.appendChild(evNote);
+    }
+
+    // Khối giá tách bạch, không gộp nguồn — cùng số với giá ngoài ô:
+    // dòng shop dùng displayPriceText khi có hàng; dòng thị trường dùng
+    // priceState (Cardmarket trend qua TCGdex × EUR_VND).
+    var prices = document.createElement('div'); prices.className = 'detail-prices';
+    var shopRow = document.createElement('div'); shopRow.className = 'detail-price-row';
+    var shopL = document.createElement('span'); var shopV = document.createElement('b');
+    if (stock) {
+      var dpt = displayPriceText(ctx.id);
+      shopL.textContent = dpt.label; shopV.textContent = dpt.text;
+    } else { shopL.textContent = 'Giá shop (mẫu)'; shopV.textContent = 'Shop chưa có lá này'; }
+    shopRow.appendChild(shopL); shopRow.appendChild(shopV); prices.appendChild(shopRow);
+    var mkRow = document.createElement('div'); mkRow.className = 'detail-price-row';
+    var mkL = document.createElement('span'); mkL.textContent = 'Giá thị trường · Cardmarket · TCGdex';
+    var mkV = document.createElement('b');
+    var ps = priceState[ctx.id];
+    if (ps && ps.st === 'ok') mkV.textContent = fmt(ps.vnd);
+    else if (ps && ps.st === 'loading') mkV.textContent = 'Đang lấy giá thị trường…';
+    else mkV.textContent = 'Chưa có giá thị trường';
+    mkRow.appendChild(mkL); mkRow.appendChild(mkV); prices.appendChild(mkRow);
+    body.appendChild(prices);
+
+    // Hành động — dựa trên trạng thái trong binder CỦA NGƯỜI XEM (myPick),
+    // kể cả khi đang xem binder người khác / link chia sẻ.
+    var acts = document.createElement('div'); acts.className = 'detail-actions';
+    if (myPick && myPick.st === 'buy-pending') {
+      var st1 = document.createElement('p'); st1.className = 'tray-note';
+      st1.textContent = '🚚 Lá này đang về binder của bạn — nhận được hàng thì bấm xác nhận Done để lên đời ✓ Mua tại shop.';
+      acts.appendChild(st1);
+      var done = document.createElement('button'); done.type = 'button'; done.className = 'co-btn';
+      done.textContent = '✓ Đã nhận hàng (đơn Done)';
+      done.addEventListener('click', function () { var p = myPick; closeDetail(); confirmDone(p); });
+      acts.appendChild(done);
+    } else if (myPick && isVerified(myPick.st)) {
+      var st2 = document.createElement('p'); st2.className = 'tray-note';
+      st2.textContent = '✓ Lá này đã xác thực trong binder của bạn — đã tính vào Giá trị binder + Leaderboard.';
+      acts.appendChild(st2);
+    } else if (myPick && myPick.st === 'dream') {
+      if (stock) {
+        var buy1 = document.createElement('button'); buy1.type = 'button'; buy1.className = 'co-btn';
+        buy1.textContent = '🛒 Mua lá này';
+        buy1.addEventListener('click', function () { closeDetail(); buyCard(cardObj); });
+        acts.appendChild(buy1);
+      }
+      var scan1 = document.createElement('button'); scan1.type = 'button'; scan1.className = 'co-btn alt';
+      scan1.textContent = '📷 Quét xác thực';
+      scan1.addEventListener('click', function () { var p = myPick; closeDetail(); openScan(p); });
+      acts.appendChild(scan1);
+    } else {
+      if (stock) {
+        var buy2 = document.createElement('button'); buy2.type = 'button'; buy2.className = 'co-btn';
+        buy2.textContent = '🛒 Mua lá này';
+        buy2.addEventListener('click', function () { closeDetail(); buyCard(cardObj); });
+        acts.appendChild(buy2);
+        if (ctx.isOther) {
+          var note2 = document.createElement('p'); note2.className = 'tray-note';
+          note2.textContent = 'Mua vào binder CỦA BẠN (không đụng tới binder đang xem).';
+          acts.appendChild(note2);
+        }
+      } else {
+        var add1 = document.createElement('button'); add1.type = 'button'; add1.className = 'co-btn';
+        add1.textContent = '○ Thêm vào binder mơ ước';
+        add1.addEventListener('click', function () { addPick(cardObj, 'dream'); closeDetail(); render(); });
+        acts.appendChild(add1);
+      }
+    }
+    if (acts.children.length) body.appendChild(acts);
+  }
+  if (els.detailClose) els.detailClose.addEventListener('click', function () { closeDetail(); });
+  if (els.detailPanel) els.detailPanel.addEventListener('click', function (e) { if (e.target === els.detailPanel) closeDetail(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && els.detailPanel && !els.detailPanel.hidden) closeDetail();
+  });
 
   // ---------- khay binder ----------
   function renderTray() {
@@ -500,6 +677,10 @@
       x.setAttribute('aria-label', 'Bỏ ' + pick.name + ' khỏi binder');
       x.addEventListener('click', function () { removePick(pick.setId, pick.id); render(); });
       row.appendChild(x);
+      row.addEventListener('click', function (e) {
+        if (e.target && e.target.closest && e.target.closest('button')) return;
+        openDetail(pick, {});
+      });
       els.trayList.appendChild(row);
     });
     els.trayEmpty.hidden = picks.length > 0;
@@ -960,6 +1141,13 @@
         var b = document.createElement('span'); b.className = 'p-badge st-' + c.st; b.textContent = ST_LABEL[c.st] || c.st;
         d.appendChild(b);
       }
+      d.setAttribute('role', 'button');
+      d.setAttribute('tabindex', '0');
+      d.setAttribute('aria-label', 'Xem chi tiết ' + (c.name || 'lá này'));
+      (function (cell, cardData) {
+        cell.addEventListener('click', function () { openDetail(cardData, { isOther: !ctx.isSelf, owner: ctx.owner }); });
+        cell.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(cardData, { isOther: !ctx.isSelf, owner: ctx.owner }); } });
+      })(d, c);
       grid.appendChild(d);
     });
     if (!ctx.cards || !ctx.cards.length) grid.innerHTML = '<p class="tray-note">Binder này chưa có lá nào (hoặc lá chưa tải xong).</p>';

@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/store.css?v=20261024-shop6">
-<link rel="stylesheet" href="css/binder.css?v=20261116-share1">
+<link rel="stylesheet" href="css/binder.css?v=20261116-detail1">
 </head>
 <body>
 <div class="shop-backdrop" aria-hidden="true"></div>
@@ -173,6 +173,13 @@
     <div id="community-body" class="community-grid">Đang tải binder cộng đồng…</div>
   </section>
 
+  <div class="detail-panel" id="detail-panel" hidden>
+    <div class="detail-card" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <button type="button" class="detail-x" id="detail-close" aria-label="Đóng chi tiết lá">×</button>
+      <div id="detail-body">Đang tải chi tiết lá…</div>
+    </div>
+  </div>
+
   <div class="scan-panel" id="scan-panel" hidden>
     <div class="scan-card">
       <h3>📷 Quét xác thực</h3>
@@ -197,6 +204,6 @@
 <script src="js/config.js?v=20261116-binder3"></script>
 <script src="js/pricing.js?v=20261116-binder3"></script>
 <script src="js/cardmatch.js?v=20261116-binder3"></script>
-<script src="js/binder.js?v=20261116-simstock1"></script>
+<script src="js/binder.js?v=20261116-detail1"></script>
 </body>
 </html>

@@ -246,3 +246,45 @@ button.pocket:hover { border-color: #899d8e; box-shadow: 3px 4px 0 #d4d8c8; }
 .p-price-label { white-space: normal; text-align: right; }
 .shared-price { width: 100%; }
 .shared-total { margin-bottom: 12px; }
+
+/* ===== Popup chi tiết lá + mua ngay (2026-11-16, gói 2) ===== */
+.detail-panel { position: fixed; inset: 0; background: #20394d99; display: grid; place-items: center; z-index: 70; padding: 16px; }
+.detail-panel[hidden] { display: none; }
+.detail-card {
+  position: relative; background: var(--panel); border: 1px solid #91a394;
+  box-shadow: 4px 5px 0 #20394d40; padding: 22px; max-width: 520px; width: 100%;
+  max-height: 88vh; overflow: auto; box-sizing: border-box;
+}
+.detail-x {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  border: 1px solid var(--ink); background: var(--panel); width: 38px; height: 38px;
+  font-size: 20px; line-height: 1; cursor: pointer; box-shadow: 2px 2px 0 var(--line);
+}
+.detail-imgwrap { position: relative; aspect-ratio: 5 / 7; max-height: 46vh; background: #e8eddf; display: grid; place-items: center; overflow: hidden; margin-bottom: 12px; }
+.detail-imgwrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.detail-ev { position: absolute; right: 8px; bottom: 8px; width: 54px; height: 70px; object-fit: cover; border: 2px solid #fff; box-shadow: 1px 1px 0 #20394d66; }
+.detail-title { font-size: 18px; font-weight: 800; line-height: 1.4; overflow-wrap: anywhere; margin: 0 34px 4px 0; }
+.detail-meta { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.detail-badge {
+  display: inline-block; background: var(--rs-ruby); color: #fff; font-size: 10.5px; font-weight: 700;
+  padding: 3px 8px; letter-spacing: .4px; margin: 6px 6px 0 0;
+}
+.detail-badge.st-dream { background: #7a8288; }
+.detail-badge.st-verified-scan { background: var(--green); }
+.detail-badge.st-verified-buy { background: var(--rs-blue); }
+.detail-badge.st-buy-pending { background: #b07d2b; }
+.detail-prices { display: grid; gap: 7px; margin: 12px 0; }
+.detail-price-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; border: 1px solid var(--line-soft); background: #fbfaf3; padding: 8px 10px; }
+.detail-price-row b { color: var(--rs-ruby); white-space: nowrap; }
+.detail-actions { display: grid; gap: 8px; margin-top: 12px; }
+.detail-actions .co-btn { margin-top: 0; }
+.mini-btn.detail-btn { background: #efe9d8; }
+.tray-row { cursor: pointer; }
+.shared-grid .pocket { cursor: pointer; }
+@media (max-width: 640px) {
+  .detail-panel { padding: 10px; }
+  .detail-card { padding: 16px; max-height: 92vh; }
+  .detail-imgwrap { max-height: 40vh; }
+  .detail-price-row { flex-wrap: wrap; }
+  .detail-price-row b { white-space: normal; }
+}
