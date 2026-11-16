@@ -296,3 +296,7 @@ h2 { font-family: var(--font-game); font-size: 34px; line-height: 1.1; font-weig
   .hero-window { width: 90px; }
   h1 { font-size: 36px; }
 }
+
+/* Dải featured Binder of the Week (bản thử binder Phase 2) */
+.botw-strip { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; background: #fdf6e0; border: 1px solid #d8b25c; box-shadow: 3px 4px 0 #20394d26; padding: 12px 18px; margin-bottom: 26px; font-size: 12.5px; line-height: 1.6; }
+.botw-strip a { font-weight: 800; color: var(--rs-ruby); white-space: nowrap; }

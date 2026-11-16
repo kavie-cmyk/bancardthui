@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/store.css?v=20261024-shop6">
-<link rel="stylesheet" href="css/binder.css?v=20261113-binder1">
+<link rel="stylesheet" href="css/binder.css?v=20261116-binder3">
 </head>
 <body>
 <div class="shop-backdrop" aria-hidden="true"></div>
@@ -24,21 +24,51 @@
       <a href="binder.html" aria-current="page">Xây binder</a>
       <a href="store.html#tracking">Tra cứu đơn</a>
     </nav>
+    <a class="shop-kho-link" href="index.html">📦 Về Kho</a>
   </div>
 </header>
 
 <main class="shop-wrap">
   <div class="proto-banner" role="note">
-    <b>🧪 BẢN BẤM THỬ</b> — Tính năng <b>Build Your Binder</b> đang dựng thử để xem cảm giác.
-    Tồn kho &amp; giá trong trang này là <b>dữ liệu mẫu</b>; bản thật sẽ nối kho thật của shop
-    và nút mua sẽ đổ vào giỏ hàng như bình thường.
+    <b>🧪 BẢN BẤM THỬ — PHASE 1 + PHASE 2 · BINDER 2 LỚP + CỘNG ĐỒNG</b><br>
+    Lá <b>○ Mơ ước</b>: thêm tự do, <b>KHÔNG</b> tính giá trị / hạng. Lá <b>✓ Đã xác thực</b> (quét thẻ thật
+    hoặc mua tại shop và đơn đã Done) mới tính vào <b>Giá trị binder</b> + <b>Leaderboard</b>.<br>
+    Phần <b>MẪU / MÔ PHỎNG</b> của bản thử: tồn kho shop là dữ liệu mẫu; <b>mua là mô phỏng vòng đời đơn</b>
+    (bấm mua → “🚚 đang về binder” → xác nhận đã nhận = Done); giá lấy thật từ <b>TCGdex</b> khi có (ghi rõ nguồn từng lá),
+    lá chưa lấy được giá thật hiện <b>“giá mẫu”</b> và không tính vào tổng; quét xác thực dùng <b>OCR chạy ngay trên máy bạn</b>
+    (Tesseract + đối sánh js/cardmatch.js) — OCR không khớp thì có nút <b>quét mô phỏng</b> ghi rõ là mô phỏng;
+    <b>Leaderboard, Binder cộng đồng, số tim / lượt chia sẻ / lượt xem của binder mẫu, phần thưởng và giải “Binder of the Week” đều là dữ liệu mẫu</b>.<br>
+    🏆 <b>Thử thách tuần</b> dùng <b>chủ đề mở</b> (bạn tự diễn giải bằng binder của mình, không có danh sách lá bắt buộc) và xếp hạng bằng
+    <b>điểm tương tác</b>: ❤️ tim ×1 · 🔗 chia sẻ ×3 · 👀 lượt xem ×0,2 (chống farm: mỗi thiết bị chỉ tính 1 lượt xem / binder / tuần, điểm lượt xem tối đa 10 điểm / binder).
   </div>
+
+  <section class="panel-block featured-block" id="featured-section" aria-label="Binder nổi bật tuần này">
+    <div class="block-head">
+      <h3>🌟 Binder nổi bật tuần này</h3>
+      <span class="sample-tag">DỮ LIỆU MẪU · BẢN THỬ</span>
+    </div>
+    <div id="featured-body">Đang tải binder nổi bật…</div>
+  </section>
+
+  <section class="panel-block shared-view" id="shared-view" hidden aria-label="Binder được chia sẻ">
+    <div class="block-head">
+      <h3 id="shared-title">🔗 Binder được chia sẻ</h3>
+      <span class="sample-tag">CHẾ ĐỘ CHỈ XEM</span>
+    </div>
+    <div id="shared-body"></div>
+    <div class="shared-actions">
+      <button type="button" class="co-btn alt inline" id="shared-like">❤️ Thả tim</button>
+      <button type="button" class="co-btn alt inline" id="shared-share">🔗 Chia sẻ binder này (+3 điểm)</button>
+      <button type="button" class="co-btn alt inline" id="shared-mine">Tạo binder của tôi →</button>
+    </div>
+    <p class="tray-note" id="shared-note"></p>
+  </section>
 
   <section class="binder-head">
     <div>
       <p class="eyebrow">BUILD YOUR BINDER</p>
       <h2>Xếp binder theo set</h2>
-      <p class="binder-sub">Chọn một set, lật từng trang binder 9 ô. Lá nào shop đang có sẽ hiện giá — bấm để cho vào binder của bạn. Ô xám là lá shop chưa có.</p>
+      <p class="binder-sub">Chọn một set, lật từng trang binder 9 ô. Bấm vào lá để thêm vào binder ở lớp <b>Mơ ước</b> — sau đó quét xác thực hoặc mua tại shop để “lên đời” thành lá thật.</p>
     </div>
     <div class="binder-controls">
       <label for="set-select">Set thẻ</label>
@@ -63,21 +93,91 @@
 
     <aside class="tray" aria-label="Binder của bạn">
       <h3>Binder của tôi</h3>
+      <div class="tray-name">
+        <label for="display-name">Tên hiển thị trên Leaderboard</label>
+        <input id="display-name" type="text" maxlength="24" placeholder="VD: Zac Sưu Tầm">
+      </div>
       <div class="tray-progress">
         <div class="tray-progress-row"><span id="tray-count">Đã chọn 0 lá</span><span id="tray-setpct"></span></div>
         <div class="progress"><i id="tray-bar"></i></div>
         <p class="tray-note" id="tray-note"></p>
       </div>
+      <div class="tray-stats">
+        <div class="tstat"><span>✓ Lá thật (đã xác thực)</span><b id="stat-verified">0</b></div>
+        <div class="tstat"><span>○ Lá mơ ước</span><b id="stat-dream">0</b></div>
+        <div class="tstat"><span>🚚 Đang về binder</span><b id="stat-pending">0</b></div>
+        <div class="tstat gold"><span>💎 Giá trị binder (chỉ lá thật)</span><b id="stat-value">0₫</b></div>
+        <p class="tray-note" id="stat-value-note">Định giá theo MỘT nguồn duy nhất: Cardmarket trend (qua TCGdex) × tỉ giá EUR→VND trong js/config.js của shop. KHÔNG gộp Cardmarket + TCGplayer. Lá thật chưa có giá Cardmarket thì hiện “chưa có giá” / “giá mẫu” và KHÔNG tính vào tổng.</p>
+      </div>
       <div id="tray-list" class="tray-list"></div>
       <div class="tray-empty" id="tray-empty">
         <img class="success-img" src="assets/store/mascot.webp" alt="">
-        <p>Chưa chọn lá nào.<br>Bấm vào lá có giá để cho vào binder.</p>
+        <p>Chưa chọn lá nào.<br>Bấm vào lá trong trang binder để thêm ở lớp Mơ ước.</p>
       </div>
-      <div class="cart-sumrow"><span>Tổng tiền binder</span><b id="tray-total">0₫</b></div>
-      <button type="button" class="co-btn" id="tray-buy" disabled>Mua cả binder →</button>
-      <button type="button" class="co-btn alt" id="tray-clear" disabled>Bỏ chọn hết</button>
-      <p class="tray-bought" id="tray-bought" hidden>Ở bản thật, các lá này sẽ vào <b>giỏ hàng</b> và đặt hàng như bình thường. Bản thử dừng ở đây — cảm ơn bạn đã bấm thử!</p>
+      <button type="button" class="co-btn" id="scan-any">📷 Quét xác thực lá mơ ước</button>
+      <button type="button" class="co-btn alt" id="share-btn">🔗 Chia sẻ binder</button>
+      <p class="tray-note" id="share-note" hidden></p>
+      <button type="button" class="co-btn alt" id="export-btn">🖼️ Xuất ảnh trang binder</button>
+      <p class="tray-note" id="export-note" hidden></p>
+      <button type="button" class="co-btn alt" id="publish-btn">🌐 Đăng lên Binder cộng đồng</button>
+      <p class="tray-note" id="publish-note" hidden></p>
+      <button type="button" class="co-btn alt" id="tray-clear" disabled>Bỏ chọn hết (set này)</button>
+      <input type="file" id="scan-file" accept="image/*" capture="environment" hidden>
     </aside>
+  </div>
+
+  <section class="panel-block" id="challenge-section" aria-label="Thử thách tuần này">
+    <div class="block-head">
+      <h3>🏆 Thử thách tuần này</h3>
+      <span class="sample-tag">CHỦ ĐỀ MẪU · BẢN THỬ</span>
+    </div>
+    <div id="challenge-body">Đang tính thử thách…</div>
+  </section>
+
+  <section class="panel-block" id="suggest-section" aria-label="Gợi ý cho binder">
+    <div class="block-head">
+      <h3>✨ Gợi ý cho binder của bạn</h3>
+      <span class="sample-tag">ƯU TIÊN LÁ SHOP CÓ HÀNG (MẪU)</span>
+    </div>
+    <div id="suggest-body">Đang tải gợi ý…</div>
+  </section>
+
+  <section class="panel-block" id="leaderboard-section" aria-label="Bảng xếp hạng">
+    <div class="block-head">
+      <h3>🏅 Leaderboard</h3>
+      <span class="sample-tag">CỘNG ĐỒNG MẪU · BẢN THỬ</span>
+    </div>
+    <div class="lb-tabs" role="tablist">
+      <button type="button" class="lb-tab active" data-lb="value">💎 Giá trị thật</button>
+      <button type="button" class="lb-tab" data-lb="setpct">📚 Hoàn thành set %</button>
+      <button type="button" class="lb-tab" data-lb="challenge">🏆 Thử thách tuần</button>
+      <button type="button" class="lb-tab" data-lb="likes">❤️ Được thích nhất</button>
+    </div>
+    <div id="lb-body">Đang tính bảng xếp hạng…</div>
+    <p class="tray-note">Hạng 💎 / 📚 chỉ tính lá <b>đã xác thực</b> — lá mơ ước không tính. Hạng 🏆 tính bằng <b>điểm tương tác</b> (❤️ ×1 · 🔗 ×3 · 👀 ×0,2). Binder cộng đồng trong bảng là dữ liệu mẫu của bản thử.</p>
+  </section>
+
+  <section class="panel-block" id="community-section" aria-label="Binder cộng đồng">
+    <div class="block-head">
+      <h3>🌐 Binder cộng đồng</h3>
+      <span class="sample-tag">BINDER MẪU · BẢN THỬ</span>
+    </div>
+    <p class="giveaway-note">🎁 Binder được thích nhất tuần nhận quà của shop <b>(mẫu)</b>.</p>
+    <div id="community-body" class="community-grid">Đang tải binder cộng đồng…</div>
+  </section>
+
+  <div class="scan-panel" id="scan-panel" hidden>
+    <div class="scan-card">
+      <h3>📷 Quét xác thực</h3>
+      <p class="tray-note" id="scan-desc">OCR chạy ngay trên máy của bạn (Tesseract.js + đối sánh js/cardmatch.js + từ điển js/cards-dict.js). Ảnh không rời khỏi máy. Khớp được lá mơ ước nào, lá đó lên đời ✓ Đã xác thực (quét).</p>
+      <p id="scan-status" role="status" aria-live="polite">Đang chuẩn bị…</p>
+      <pre id="scan-ocr-text" hidden></pre>
+      <div id="scan-cands"></div>
+      <div class="scan-actions">
+        <button type="button" class="co-btn" id="scan-sim" hidden>Quét mô phỏng thay thế (bản thử — ghi rõ là mô phỏng)</button>
+        <button type="button" class="co-btn alt" id="scan-close">Đóng</button>
+      </div>
+    </div>
   </div>
 
   <footer class="shop-foot">
@@ -87,6 +187,9 @@
   </footer>
 </main>
 
-<script src="js/binder.js?v=20261113-binder1"></script>
+<script src="js/config.js?v=20261116-binder3"></script>
+<script src="js/pricing.js?v=20261116-binder3"></script>
+<script src="js/cardmatch.js?v=20261116-binder3"></script>
+<script src="js/binder.js?v=20261116-binder3"></script>
 </body>
 </html>
